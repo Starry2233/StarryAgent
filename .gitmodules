@@ -3,4 +3,4 @@
 	url = https://github.com/Starry2233/qt_-lib_toast
 [submodule "external/syntax-highlighting"]
 	path = external/syntax-highlighting
-	url = https://invent.kde.org/frameworks/syntax-highlighting.git
+	url = https://github.com/Starry2233/syntax-highlighting
