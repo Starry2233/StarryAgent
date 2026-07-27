@@ -137,5 +137,3 @@ Android、Qt SDK、JDK、NDK 的已验证构建记录目前整理在 `CLAUDE.md`
 ## License
 
 本仓库当前附带 `LICENSE` 文件（GPLv3 文本）。
-
-在对外发布或引入更多第三方依赖前，建议再次核对整体许可证策略。
