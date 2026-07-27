@@ -1,0 +1,5 @@
+BreakBeforeBraces: Allman
+PointerAlignment: Right
+IndentWidth: 4
+UseTab: Never
+TabWidth: 4
