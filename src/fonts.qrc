@@ -1,0 +1,11 @@
+<RCC>
+    <qresource prefix="/fonts">
+        <file alias="Fraunces.ttf">ui/fonts/Fraunces.ttf</file>
+        <file alias="HankenGrotesk.ttf">ui/fonts/HankenGrotesk.ttf</file>
+        <file alias="IBMPlexMono-Regular.ttf">ui/fonts/IBMPlexMono-Regular.ttf</file>
+        <file alias="IBMPlexMono-Medium.ttf">ui/fonts/IBMPlexMono-Medium.ttf</file>
+        <file alias="NotoSansSC.ttf">ui/fonts/NotoSansSC.ttf</file>
+        <file alias="NotoSerifSC.ttf">ui/fonts/NotoSerifSC.ttf</file>
+        <file alias="SegoeUISymbol.ttf">ui/fonts/SegoeUISymbol.ttf</file>
+    </qresource>
+</RCC>

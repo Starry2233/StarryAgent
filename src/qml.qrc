@@ -1,0 +1,33 @@
+<RCC>
+    <qresource prefix="/">
+        <file>ui/qml/main.qml</file>
+        <file>ui/qml/Theme.qml</file>
+        <file>ui/qml/ChatView.qml</file>
+        <file>ui/qml/components/DirPromptView.qml</file>
+        <file>ui/qml/components/ToolCallCard.qml</file>
+        <file>ui/qml/components/Sidebar.qml</file>
+        <file>ui/qml/components/ModePicker.qml</file>
+        <file>ui/qml/components/SettingsView.qml</file>
+        <file>ui/qml/components/ScheduledTasksView.qml</file>
+        <file>ui/qml/components/ThemeButton.qml</file>
+        <file>ui/qml/components/ThemedMenu.qml</file>
+        <file>ui/qml/components/ToggleRow.qml</file>
+        <file>ui/qml/components/PathRow.qml</file>
+        <file>ui/qml/components/FieldBg.qml</file>
+        <file>ui/qml/components/MiuixSwitch.qml</file>
+        <file>ui/qml/components/MiuixCheckBox.qml</file>
+        <file>ui/qml/components/ClayCursor.qml</file>
+        <file>ui/qml/components/ConfirmDialog.qml</file>
+        <file>ui/qml/components/PropertiesDialog.qml</file>
+        <file>ui/qml/components/MarkdownView.qml</file>
+        <file>ui/qml/components/CodeBlock.qml</file>
+        <file>ui/qml/components/CameraCaptureWindow.qml</file>
+        <file>ui/qml/components/ImagePreviewPane.qml</file>
+        <file>ui/qml/components/ImagePreviewWindow.qml</file>
+        <file>ui/qml/components/TextSelectionWindow.qml</file>
+        <file>ui/qml/components/TableBlock.qml</file>
+        <file>ui/qml/components/LatexBlock.qml</file>
+        <file>ui/qml/components/PaperGrain.qml</file>
+        <file>ui/qml/components/grain.frag.qsb</file>
+    </qresource>
+</RCC>

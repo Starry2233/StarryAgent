@@ -1,0 +1,58 @@
+$ErrorActionPreference = "Stop"
+
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+$LogDir = Join-Path $RepoRoot "logs"
+$Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+$StdoutLog = Join-Path $LogDir "verbose_run_${Timestamp}_stdout.log"
+$StderrLog = Join-Path $LogDir "verbose_run_${Timestamp}_stderr.log"
+
+New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+
+$env:QT_LOGGING_RULES = "*.debug=true;qt.*.debug=true;qt.qml.debug=true;qt.quick.*=true;qt.scenegraph.*=true;qt.rhi.*=true"
+$env:QT_FORCE_STDERR_LOGGING = "1"
+$env:QSG_INFO = "1"
+$env:QSG_RHI_BACKEND = "d3d11"
+$env:QSG_RENDERER_DEBUG = "render"
+$env:QSG_RHI_PROFILE = "1"
+
+$configureArgs = @(
+    "f"
+    "-m"
+    "debug"
+    "-y"
+)
+
+$runArgs = @(
+    "run"
+    "starryagent"
+    "--logtype=verbose"
+    "--max-old-space-size=1024"
+    "--max-render-page-size=420"
+)
+
+Write-Host "Configuring: xmake $($configureArgs -join ' ')"
+& xmake @configureArgs
+if ($LASTEXITCODE -ne 0) {
+    throw "xmake configure failed with exit code $LASTEXITCODE"
+}
+
+Write-Host "Launching: xmake $($runArgs -join ' ')"
+Write-Host "stdout: $StdoutLog"
+Write-Host "stderr: $StderrLog"
+$process = Start-Process -FilePath "xmake" `
+    -ArgumentList $runArgs `
+    -PassThru `
+    -WorkingDirectory $RepoRoot `
+    -RedirectStandardOutput $StdoutLog `
+    -RedirectStandardError $StderrLog
+
+try {
+    if (-not $process.WaitForExit(60000)) {
+        Write-Warning "Process exceeded 60 seconds, forcing termination."
+        Stop-Process -Id $process.Id -Force
+    }
+} finally {
+    if (Get-Process -Id $process.Id -ErrorAction SilentlyContinue) {
+        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    }
+}

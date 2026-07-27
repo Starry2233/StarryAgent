@@ -1,0 +1,220 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import "components"
+
+ApplicationWindow {
+    id: win
+    visible: true
+    width: 1180
+    height: 760
+    minimumWidth: 462
+    minimumHeight: 600
+    color: theme.hasWallpaper ? "transparent" : theme.paper
+    title: qsTr("StarryAgent")
+
+    Theme { id: theme; dark: settings.theme === "dark" }
+    Image {
+        anchors.fill: parent
+        visible: theme.wallpaperSource.length > 0 && theme.wallpaperMode !== "tile"
+        source: theme.wallpaperSource
+        fillMode: theme.wallpaperMode === "contain" ? Image.PreserveAspectFit : Image.PreserveAspectCrop
+        asynchronous: true
+        cache: true
+        opacity: theme.wallpaperOpacity
+    }
+    BorderImage {
+        anchors.fill: parent
+        visible: theme.wallpaperSource.length > 0 && theme.wallpaperMode === "tile"
+        source: theme.wallpaperSource
+        horizontalTileMode: BorderImage.Repeat
+        verticalTileMode: BorderImage.Repeat
+        opacity: theme.wallpaperOpacity
+    }
+    // faint warm clay glow at the top for depth (no flat solid)
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        height: parent.height * 0.45
+        visible: !theme.hasWallpaper
+        gradient: Gradient {
+            orientation: Gradient.Vertical
+            GradientStop { position: 0.0; color: Qt.rgba(0.76, 0.31, 0.16, 0.06) }
+            GradientStop { position: 1.0; color: Qt.rgba(0.76, 0.31, 0.16, 0.00) }
+        }
+    }
+
+    // first launch: pick the .starryagent directory.
+    DirPromptView {
+        id: dirPrompt
+        anchors.fill: parent
+        visible: config.firstLaunch
+    }
+
+    // main shell: sidebar + right pane (hidden on first launch)
+    Item {
+        id: shell
+        anchors.fill: parent
+        visible: !config.firstLaunch
+
+        // Narrow viewport → sidebar becomes a slide-in drawer (overlay).
+        // Wide viewport → sidebar is inline (occupies layout space).
+        property bool isNarrow: win.width < 600
+        property bool drawerOpen: false
+
+        // Right-pane navigation. `destination` is a pure binding; `_navOverride`
+        // is the imperative layer set by user actions and cleared to fall back
+        // to the active-conversation-derived state. This makes Settings a peer
+        // of Chat in the right layout — never an overlay. The three views are
+        // mutually exclusive: picker | chat | settings.
+        property var _navOverride: null
+        property string destination: _navOverride !== null ? _navOverride
+                                           : (conversations.active ? "chat" : "picker")
+
+        // Whenever a conversation becomes active (sidebar row click or
+        // new-conv pick), drop the override so the right pane follows it.
+        // On narrow viewports, also close the drawer — the user picked one.
+        Connections {
+            target: conversations
+            function onActiveChanged() {
+                if (conversations.active) {
+                    shell._navOverride = null
+                    if (shell.isNarrow) shell.drawerOpen = false
+                }
+            }
+        }
+
+        // --- Content area ---
+        // Full width on narrow (sidebar overlays on top), offset by sidebar
+        // width on wide (sidebar is inline).
+        Item {
+            id: contentArea
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            anchors.leftMargin: shell.isNarrow ? 0 : 280
+
+            ChatView {
+                id: chat
+                anchors.fill: parent
+                visible: shell.destination === "chat"
+                isDemo: demoMode
+            }
+
+            ModePicker {
+                id: picker
+                anchors.fill: parent
+                visible: shell.destination === "picker"
+                onPicked: (modeId) => {
+                    conversations.newConversation(modeId)
+                    shell._navOverride = null   // active now set → binding drives "chat"
+                }
+            }
+
+            SettingsView {
+                id: settingsPanel
+                anchors.fill: parent
+                visible: shell.destination === "settings"
+            }
+        }
+
+        // --- Hamburger button (narrow only) ---
+        // Top-left floating button to toggle the drawer.
+        Item {
+            id: hamburger
+            visible: shell.isNarrow
+            width: 40; height: 40
+            x: theme.sp2
+            y: theme.sp2
+            z: 100
+            Rectangle {
+                anchors.fill: parent
+                radius: theme.rSm
+                color: hamburgerMa.containsMouse ? Qt.rgba(0, 0, 0, 0.06) : "transparent"
+                border.color: theme.line
+                border.width: 1
+            }
+            // three horizontal lines
+            Column {
+                anchors.centerIn: parent
+                spacing: 4
+                Repeater {
+                    model: 3
+                    Rectangle { width: 18; height: 2; radius: 1; color: theme.ink }
+                }
+            }
+            MouseArea {
+                id: hamburgerMa
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: shell.drawerOpen = !shell.drawerOpen
+            }
+        }
+
+        // --- Edge swipe area (narrow only, drawer closed) ---
+        // Invisible 24px strip on the left edge. A rightward swipe opens the
+        // drawer; a simple tap does nothing (avoids accidental opens).
+        MouseArea {
+            id: edgeSwipe
+            visible: shell.isNarrow && !shell.drawerOpen
+            width: 24
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            z: 50
+            property real startX: 0
+            property real startY: 0
+            onPressed: (mouse) => {
+                startX = mouse.x
+                startY = mouse.y
+            }
+            onPositionChanged: (mouse) => {
+                var dx = mouse.x - startX
+                var dy = Math.abs(mouse.y - startY)
+                if (dx > 20 && dx > dy * 2)
+                    shell.drawerOpen = true
+            }
+        }
+
+        // --- Scrim (narrow only, drawer open) ---
+        // Dark overlay between content and drawer. Tap to close.
+        Rectangle {
+            id: scrim
+            visible: shell.isNarrow && shell.drawerOpen
+            anchors.fill: parent
+            color: Qt.rgba(0, 0, 0, 0.35)
+            z: 150
+            MouseArea { anchors.fill: parent; onClicked: shell.drawerOpen = false }
+            Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+        }
+
+        // --- Sidebar ---
+        // Wide: inline at x=0, z=0 (content offset by 280px).
+        // Narrow: overlay drawer, slides from -width to 0.
+        Sidebar {
+            id: sidebar
+            width: 280
+            height: parent.height
+            x: shell.isNarrow ? (shell.drawerOpen ? 0 : -width) : 0
+            y: 0
+            z: shell.isNarrow ? 200 : 0
+            settingsActive: shell.destination === "settings"
+            onRequestNewConversation: shell._navOverride = "picker"
+            onRequestSettings: shell._navOverride = "settings"
+            onRequestOpenConversation: {
+                shell._navOverride = null
+                if (shell.isNarrow)
+                    shell.drawerOpen = false
+            }
+            onRequestClose: shell.drawerOpen = false
+            Behavior on x {
+                NumberAnimation { duration: 250; easing.type: Easing.OutCubic }
+                enabled: shell.isNarrow
+            }
+        }
+    }
+
+}

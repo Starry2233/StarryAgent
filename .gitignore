@@ -1,0 +1,79 @@
+# xmake
+.xmake/
+.xmake-cache/
+.xmake.deps/
+
+# build outputs
+build/
+dist/
+bin/
+lib/
+
+# IDE and local settings
+.vs/
+.vscode/
+.idea/
+*.user
+*.user.*
+*.suo
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.VC.opendb
+
+# Qt generated files
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+*.qmlc
+*.jsc
+*.rcc
+
+# Compiler and debugger artifacts
+*.obj
+*.o
+*.lo
+*.la
+*.a
+*.lib
+*.dll
+*.so
+*.dylib
+*.exe
+*.exp
+*.ilk
+*.pdb
+*.idb
+
+# Logs and runtime data
+*.log
+*.tmp
+*.bak
+*.orig
+*.stackdump
+logs/
+err.txt
+out.txt
+tools_smoke_err.txt
+tools_smoke_out.txt
+
+# Editor backups
+*~
+*.un~
+*.pro.user
+
+# Android / Gradle local outputs
+**/android-build/
+**/.gradle/
+**/local.properties
+
+# OS files
+Thumbs.db
+Desktop.ini
+
+# Project-local scratch
+.tmp/
+.doge/
+.claude/
+tmp_repro/

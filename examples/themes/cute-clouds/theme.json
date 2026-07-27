@@ -1,0 +1,46 @@
+{
+  "id": "cute-clouds",
+  "name": "Cute Clouds",
+  "version": "1.0.0",
+  "author": "StarryAgent",
+  "description": "Soft candy colors with gentle cloud wallpaper for a light, cute workspace.",
+  "colors": {
+    "light": {
+      "paper": "#FFF5F8",
+      "surface": "#FFFBFD",
+      "surfaceAlt": "#F7EAF1",
+      "ink": "#30242C",
+      "inkSoft": "#8B7180",
+      "line": "#E8CBD8",
+      "clay": "#EC6F9E",
+      "clayDeep": "#C94E7D",
+      "moss": "#6EA890",
+      "shadowColor": "#6B30401F"
+    },
+    "dark": {
+      "paper": "#1C161C",
+      "surface": "#271E27",
+      "surfaceAlt": "#302532",
+      "ink": "#F7EAF1",
+      "inkSoft": "#B99EAD",
+      "line": "#4A3846",
+      "clay": "#FF8AB5",
+      "clayDeep": "#E86C9C",
+      "moss": "#8FC7AE",
+      "shadowColor": "#00000073"
+    }
+  },
+  "fonts": {},
+  "wallpapers": {
+    "light": {
+      "file": "wallpapers/light.png",
+      "mode": "cover",
+      "opacity": 0.52
+    },
+    "dark": {
+      "file": "wallpapers/dark.png",
+      "mode": "cover",
+      "opacity": 0.42
+    }
+  }
+}
