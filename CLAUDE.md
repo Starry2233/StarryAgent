@@ -105,13 +105,57 @@ On new conversation, the user picks one — only the initial system prompt diffe
 
 ## Android build notes
 
-Successful Android debug APK build on 2026-07-02:
+Successful Android debug APK build on 2026-07-02 (Windows verified path):
 
 - The repo currently builds with `xmake`, not Gradle/CMake directly at the root.
 - Use `C:/Qt/6.8.3` as the single Qt SDK baseline. For Android, use `C:/Qt/6.8.3/android_arm64_v8a` with host tools from `C:/Qt/6.8.3/mingw_64`.
 - Use JDK 17 at `D:/Program Files/Java/jdk-17`.
 - Use Android SDK at `C:/Users/Administrator/AppData/Local/Android/Sdk`.
 - A working NDK is `C:/Users/Administrator/AppData/Local/Android/Sdk/ndk/27.2.12479018`.
+- Qt's Android OpenSSL TLS backend does not bundle OpenSSL itself.
+  `scripts/build_android_gradle.ps1` copies `libssl*.so` / `libcrypto*.so`
+  from an existing xmake `openssl3` package cache or from
+  `STARRY_ANDROID_OPENSSL_ROOT` / `-AndroidOpenSslRoot`. If those are missing,
+  it can download a prebuilt `.tar.gz` from
+  `STARRY_ANDROID_OPENSSL_ARCHIVE_URL` / `-AndroidOpenSslArchiveUrl`, optionally
+  verify `STARRY_ANDROID_OPENSSL_ARCHIVE_SHA256` /
+  `-AndroidOpenSslArchiveSha256`, and cache it under
+  `build/android/openssl-cache` or `-AndroidOpenSslCacheDir`. Do not add
+  `openssl3` as a main Android target dependency on Windows; OpenSSL's final
+  link can exceed the Windows argv length limit. Without those runtime
+  libraries, networking falls back to `cert-only` and logs
+  `Active TLS backend does not support key creation` /
+  `QSslSocket::connectToHostEncrypted: TLS initialization failed`.
+
+### Recommended two-stage command
+
+Use the repository script for normal Windows builds. It deliberately builds the
+native library with xmake and packages it with the Gradle wrapper as separate
+stages; it does not ask xmake/androiddeployqt to generate the APK.
+
+```powershell
+# Known-good native configuration: arm64-v8a, Qt 6.8.3, NDK API 35, release .so.
+$env:STARRY_ANDROID_OPENSSL_ARCHIVE_URL='https://example.com/android-openssl-prebuilt.tar.gz'
+$env:STARRY_ANDROID_OPENSSL_ARCHIVE_SHA256='<optional sha256>'
+pwsh -File scripts/build_android_gradle.ps1 -Phase native
+
+# Package the staged Gradle project as a debug APK.
+pwsh -File scripts/build_android_gradle.ps1 -Phase package -GradleVariant debug
+```
+
+The default ABI is intentionally `arm64-v8a`. Build WSA's native compatibility
+target separately when required; do not put it in the default package:
+
+```powershell
+pwsh -File scripts/build_android_gradle.ps1 -Abis x86_64 -Phase all
+```
+
+The script validates the staged `libstarryagent.so` has no ELF `RPATH`/
+`RUNPATH`, then verifies the final APK contains exactly the requested ABI(s),
+the ABI-suffixed app library, `libc++_shared.so`, Qt Core, and the Android Qt
+platform plugin. If Qt's OpenSSL TLS backend is present, the script also
+verifies that `libssl*.so` and `libcrypto*.so` are packaged into the same ABI
+directory.
 
 Configure xmake for arm64-v8a:
 
@@ -139,8 +183,12 @@ In that case, stop the stuck `xmake`/`androiddeployqt` processes and package thr
 cd build\.qt\app\android\starryagent\android-build
 $env:JAVA_HOME='D:\Program Files\Java\jdk-17'
 $env:Path="$env:JAVA_HOME\bin;$env:Path"
+# Windows
 .\gradlew.bat assembleDebug --no-daemon --stacktrace
 .\gradlew.bat --stop
+# macOS/Linux with pwsh
+./gradlew assembleDebug --no-daemon --stacktrace
+./gradlew --stop
 ```
 
 The successful APK output path was:
@@ -156,9 +204,9 @@ Observed warning: Android Gradle Plugin 8.6.0 warns that `compileSdk = 37` is ne
 - As of 2026-07-06, Android `exec` / `shell_exec` now have a real Shizuku path instead of being TODO-only.
 - Implementation layout:
   - C++ bridge: `src/tools/AndroidShellBridge.cpp`
-  - Java bridge: `android/java/org/qtproject/example/starryagent/shizuku/ShizukuRunner.java`
-  - Shizuku user service: `android/java/org/qtproject/example/starryagent/shizuku/StarryShellService.java`
-  - AIDL: `android/aidl/org/qtproject/example/starryagent/shizuku/IStarryShellService.aidl`
+  - Java bridge: `android/java/moe/starry2233/StarryAgent/shizuku/ShizukuRunner.java`
+  - Shizuku user service: `android/java/moe/starry2233/StarryAgent/shizuku/StarryShellService.java`
+  - AIDL: `android/aidl/moe/starry2233/StarryAgent/shizuku/IStarryShellService.aidl`
 - Android packaging must inject:
   - Gradle deps: `dev.rikka.shizuku:api:13.1.5`, `dev.rikka.shizuku:provider:13.1.5`, `androidx.annotation:annotation:1.8.2`
   - `buildFeatures { aidl true; buildConfig true }`

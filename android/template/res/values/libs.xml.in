@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <array name="bundled_libs">
+    </array>
+
+    <array name="qt_libs">
+@@QT_LIB_ITEMS@@
+    </array>
+
+    <array name="load_local_libs">
+@@LOAD_LOCAL_LIB_ITEMS@@
+    </array>
+
+    <string name="static_init_classes"></string>
+    <string name="use_local_qt_libs">1</string>
+    <string name="bundle_local_qt_libs">1</string>
+    <string name="system_libs_prefix"></string>
+</resources>

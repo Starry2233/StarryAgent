@@ -32,13 +32,13 @@ StarryAgent 当前定位为一个跨平台 AI Agent 客户端：
 - `android/` 下的 Java / AIDL / Shizuku 桥接
 - `xmake.lua` 驱动的当前构建入口
 - `src/main.cpp` 中可见的 demo / smoke test 启动参数
-- `docs/PROGRESS.md` 中记录的阶段性实现进展
+- `PROGRESS.md` 中记录的阶段性实现进展
 
 同时也应注意：README 不替代产品规格文档，也不把长期规划写成“已完全完成”的功能列表。若要理解产品目标、实现约束与当前进度，优先看下面这些文档：
 
 - `PLAN.md`：产品规格与目标
 - `CLAUDE.md`：仓库协作与实现约束
-- `docs/PROGRESS.md`：阶段性实现进展
+- `PROGRESS.md`：阶段性实现进展
 - `docs/debug/DEBUG_NOTES_2026-07-07.md`：历史调试记录
 
 ## Quick Start
@@ -66,6 +66,19 @@ xmake run starryagent -- --test-tools
 
 Android、Qt SDK、JDK、NDK 的已验证构建记录目前整理在 `CLAUDE.md` 中。
 
+如果要运行仓库自带的 PowerShell 脚本，请使用 `pwsh -File ...`。
+
+Android 构建采用两阶段流程：
+
+- `pwsh -File scripts/build_android_gradle.ps1 -Phase native`
+  - 调用 xmake 产出并暂存 native `libstarryagent.so`
+- `pwsh -File scripts/build_android_gradle.ps1 -Phase package`
+  - 用仓库内 `android/template/` 的 Gradle wrapper 与模板工程生成 APK
+
+默认走已验证的 `arm64-v8a` / Qt 6.8.3 / NDK API 35 native 配置；`x86_64` 需要显式传入 `-Abis x86_64`，避免 WSA 调试构建污染默认 APK。
+
+Android TLS runtime 需要目标 ABI 的 `libssl*.so` / `libcrypto*.so`。脚本会优先从已有 xmake `openssl3` package cache、`STARRY_ANDROID_OPENSSL_ROOT` / `-AndroidOpenSslRoot` 指向的预编译目录，或 `STARRY_ANDROID_OPENSSL_ARCHIVE_URL` / `-AndroidOpenSslArchiveUrl` 指向的预编译 `.tar.gz` 获取；不要在 Windows 主 Android target 里现场构建 `openssl3`，它的最终链接可能触发 argv 长度限制。
+
 ## Repository Layout
 
 ```text
@@ -92,7 +105,7 @@ Android、Qt SDK、JDK、NDK 的已验证构建记录目前整理在 `CLAUDE.md`
 - `examples/`
   - 当前包含主题示例，如 `examples/themes/cute-clouds/` 与对应打包文件。
 - `external/`
-  - 仓库依赖的外部子模块，不应当按普通源码目录随意移动或忽略。
+  - 仓库依赖的外部子模块，其中 `external/libarchive` 也是当前 in-tree vendored build 输入，不应当按普通源码目录随意移动或忽略。
 - `scripts/`
   - 本地辅助脚本与调试脚本。
 
@@ -103,7 +116,8 @@ Android、Qt SDK、JDK、NDK 的已验证构建记录目前整理在 `CLAUDE.md`
 - C++20
 - Qt 6.8.3
 - xrepo 依赖管理
-- 主要依赖：`nlohmann_json`、`libcurl`、`sqlite3`、`libarchive`
+- 主要依赖：`nlohmann_json`、`libcurl`、`sqlite3`
+- `external/libarchive` 子模块通过 `xmake.lua` 中的 `libarchive_vendor` 静态目标参与构建
 
 这些信息以 `xmake.lua` 为当前仓库状态的直接依据。
 
@@ -113,7 +127,7 @@ Android、Qt SDK、JDK、NDK 的已验证构建记录目前整理在 `CLAUDE.md`
   - 产品功能、平台范围、工具能力、交互模式等规格来源。
 - `CLAUDE.md`
   - 面向本仓库协作时的实现约束、设计方向、Android 构建记录。
-- `docs/PROGRESS.md`
+- `PROGRESS.md`
   - 当前阶段的落地进度记录。
 - `docs/debug/DEBUG_NOTES_2026-07-07.md`
   - 一份历史调试调查笔记，适合作为内部参考，不是正式产品文档。
@@ -127,10 +141,11 @@ Android、Qt SDK、JDK、NDK 的已验证构建记录目前整理在 `CLAUDE.md`
 
 ## Submodules
 
-当前 `external/` 下有两个重要子模块：
+当前 `external/` 下有三个重要子模块：
 
 - `external/qt-toast`
 - `external/syntax-highlighting`
+- `external/libarchive`
 
 不要把整个 `external/` 当作可随意整理或忽略的目录。
 

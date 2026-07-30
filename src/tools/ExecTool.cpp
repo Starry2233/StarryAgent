@@ -14,6 +14,7 @@ QString ExecTool::description() const
 {
     return QStringLiteral(
         "Run a shell command and return its combined stdout+stderr. "
+        "On Android this uses the native `sh` shell, not Shizuku. "
         "On Windows the command runs via `cmd.exe /c`. Use for build steps, "
         "git operations, and other CLI tasks. The working directory is the "
         "workspace.");
@@ -39,11 +40,6 @@ QString ExecTool::execute(const json &args)
     if (command.empty())
         return QStringLiteral("Error: `command` is required");
     const QString workdir = ToolWorkdir::effectiveWorkdir(args, m_workspace);
-
-#ifdef Q_OS_ANDROID
-    return AndroidShellBridge::runCommand(
-        QStringLiteral("sh"), QString::fromStdString(command), workdir);
-#endif
 
     QProcess p;
     p.setWorkingDirectory(workdir);

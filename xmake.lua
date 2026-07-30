@@ -1,7 +1,97 @@
 -- StarryAgent build config
--- xmake + clang-cl (MSVC ABI) + Qt 6.8.3 Quick + xrepo deps
+-- xmake + Qt 6.8.3 Quick + xrepo deps
 
 set_project("StarryAgent")
+
+local android_openssl_root = os.getenv("STARRY_ANDROID_OPENSSL_ROOT") or
+                              os.getenv("ANDROID_OPENSSL_ROOT") or
+                              os.getenv("OPENSSL_ANDROID_ROOT")
+
+local libarchive_sources = {
+    "external/libarchive/libarchive/archive_acl.c",
+    "external/libarchive/libarchive/archive_blake2sp_ref.c",
+    "external/libarchive/libarchive/archive_blake2s_ref.c",
+    "external/libarchive/libarchive/archive_check_magic.c",
+    "external/libarchive/libarchive/archive_cmdline.c",
+    "external/libarchive/libarchive/archive_cryptor.c",
+    "external/libarchive/libarchive/archive_digest.c",
+    "external/libarchive/libarchive/archive_entry.c",
+    "external/libarchive/libarchive/archive_entry_copy_bhfi.c",
+    "external/libarchive/libarchive/archive_entry_copy_stat.c",
+    "external/libarchive/libarchive/archive_entry_link_resolver.c",
+    "external/libarchive/libarchive/archive_entry_sparse.c",
+    "external/libarchive/libarchive/archive_entry_stat.c",
+    "external/libarchive/libarchive/archive_entry_strmode.c",
+    "external/libarchive/libarchive/archive_entry_xattr.c",
+    "external/libarchive/libarchive/archive_hmac.c",
+    "external/libarchive/libarchive/archive_match.c",
+    "external/libarchive/libarchive/archive_options.c",
+    "external/libarchive/libarchive/archive_pack_dev.c",
+    "external/libarchive/libarchive/archive_parse_date.c",
+    "external/libarchive/libarchive/archive_pathmatch.c",
+    "external/libarchive/libarchive/archive_ppmd7.c",
+    "external/libarchive/libarchive/archive_ppmd8.c",
+    "external/libarchive/libarchive/archive_random.c",
+    "external/libarchive/libarchive/archive_rb.c",
+    "external/libarchive/libarchive/archive_read.c",
+    "external/libarchive/libarchive/archive_read_add_passphrase.c",
+    "external/libarchive/libarchive/archive_read_append_filter.c",
+    "external/libarchive/libarchive/archive_read_data_into_fd.c",
+    "external/libarchive/libarchive/archive_read_disk_entry_from_file.c",
+    "external/libarchive/libarchive/archive_read_disk_posix.c",
+    "external/libarchive/libarchive/archive_read_extract.c",
+    "external/libarchive/libarchive/archive_read_extract2.c",
+    "external/libarchive/libarchive/archive_read_open_fd.c",
+    "external/libarchive/libarchive/archive_read_open_file.c",
+    "external/libarchive/libarchive/archive_read_open_filename.c",
+    "external/libarchive/libarchive/archive_read_open_memory.c",
+    "external/libarchive/libarchive/archive_read_set_format.c",
+    "external/libarchive/libarchive/archive_read_set_options.c",
+    "external/libarchive/libarchive/archive_read_support_filter_all.c",
+    "external/libarchive/libarchive/archive_read_support_filter_by_code.c",
+    "external/libarchive/libarchive/archive_read_support_filter_bzip2.c",
+    "external/libarchive/libarchive/archive_read_support_filter_compress.c",
+    "external/libarchive/libarchive/archive_read_support_filter_grzip.c",
+    "external/libarchive/libarchive/archive_read_support_filter_gzip.c",
+    "external/libarchive/libarchive/archive_read_support_filter_lrzip.c",
+    "external/libarchive/libarchive/archive_read_support_filter_lz4.c",
+    "external/libarchive/libarchive/archive_read_support_filter_lzop.c",
+    "external/libarchive/libarchive/archive_read_support_filter_none.c",
+    "external/libarchive/libarchive/archive_read_support_filter_program.c",
+    "external/libarchive/libarchive/archive_read_support_filter_rpm.c",
+    "external/libarchive/libarchive/archive_read_support_filter_uu.c",
+    "external/libarchive/libarchive/archive_read_support_filter_xz.c",
+    "external/libarchive/libarchive/archive_read_support_filter_zstd.c",
+    "external/libarchive/libarchive/archive_read_support_format_7zip.c",
+    "external/libarchive/libarchive/archive_read_support_format_all.c",
+    "external/libarchive/libarchive/archive_read_support_format_ar.c",
+    "external/libarchive/libarchive/archive_read_support_format_by_code.c",
+    "external/libarchive/libarchive/archive_read_support_format_cab.c",
+    "external/libarchive/libarchive/archive_read_support_format_cpio.c",
+    "external/libarchive/libarchive/archive_read_support_format_empty.c",
+    "external/libarchive/libarchive/archive_read_support_format_iso9660.c",
+    "external/libarchive/libarchive/archive_read_support_format_lha.c",
+    "external/libarchive/libarchive/archive_read_support_format_mtree.c",
+    "external/libarchive/libarchive/archive_read_support_format_rar.c",
+    "external/libarchive/libarchive/archive_read_support_format_rar5.c",
+    "external/libarchive/libarchive/archive_read_support_format_raw.c",
+    "external/libarchive/libarchive/archive_read_support_format_tar.c",
+    "external/libarchive/libarchive/archive_read_support_format_warc.c",
+    "external/libarchive/libarchive/archive_read_support_format_xar.c",
+    "external/libarchive/libarchive/archive_read_support_format_zip.c",
+    "external/libarchive/libarchive/archive_string.c",
+    "external/libarchive/libarchive/archive_string_sprintf.c",
+    "external/libarchive/libarchive/archive_time.c",
+    "external/libarchive/libarchive/archive_util.c",
+    "external/libarchive/libarchive/archive_version_details.c",
+    "external/libarchive/libarchive/archive_virtual.c",
+}
+if is_plat("windows") then
+    table.insert(libarchive_sources, "external/libarchive/libarchive/archive_windows.c")
+    table.insert(libarchive_sources, "external/libarchive/libarchive/archive_read_disk_windows.c")
+else
+    table.insert(libarchive_sources, "external/libarchive/libarchive/archive_disk_acl_linux.c")
+end
 set_languages("c++20")
 -- set_arch("x64")
 -- Prefer ccache when it is available. xmake falls back to the configured
@@ -10,31 +100,72 @@ set_policy("build.ccache", true)
 
 add_rules("mode.debug", "mode.release")
 
--- Windows: clang-cl toolchain (user requirement). xmake auto-loads MSVC sdk for headers/libs.
-if is_plat("windows") then
-    set_toolchains("clang-cl")
+-- Windows defaults to clang-cl (MSVC ABI).
+-- Android keeps xmake's native Android/NDK toolchain selection.
+-- Other non-Windows targets default to LLVM/Clang unless the user passes a
+-- toolchain explicitly.
+if not get_config("toolchain") then
+    if is_plat("windows") then
+        set_toolchains("clang-cl")
+    elseif not is_plat("android") then
+        set_toolchains("llvm")
+    end
 end
 
--- Qt Quick application rule (qrc compile + Qt frameworks + windows deploy)
--- xmake auto-detects the Qt SDK (C:/Qt/6.8.3/msvc2022_64).
-add_rules("qt.quickapp")
-
--- third-party deps via xrepo (libcurl uses Windows Schannel for TLS; no openssl/Perl needed)
--- On Android, use Qt's QNetworkAccessManager for HTTP (no xrepo packages to avoid openssl build)
+-- third-party deps via xrepo
+-- Windows keeps libcurl for desktop and uses Schannel for TLS there.
+-- Android packaging stages prebuilt OpenSSL runtime libs separately, so
+-- avoid pulling xrepo openssl3 into the Android native dependency graph.
+add_requires("nlohmann_json", "sqlite3", "zlib", "zstd", "xz", "bzip2")
 if not is_plat("android") then
-    add_requires("nlohmann_json", "libcurl", "sqlite3", "libarchive")
-else
-    add_requires("nlohmann_json", "libarchive")
-    -- Android NDK doesn't ship sqlite3 as system library; bundle via xrepo
-    add_requires("sqlite3")
+    add_requires("libcurl")
 end
+
+target("libarchive_vendor")
+    set_kind("static")
+    set_languages("c99")
+    add_files(libarchive_sources)
+    add_headerfiles("external/libarchive/libarchive/*.h")
+    add_includedirs("external/libarchive/libarchive", "external/libarchive/build/xmake", {public = true})
+    if is_plat("android") then
+        add_includedirs("external/libarchive/contrib/android/include")
+        if android_openssl_root and #android_openssl_root > 0 then
+            local android_openssl_abi_root = path.join(android_openssl_root, get_config("arch") or "")
+            add_includedirs(path.join(android_openssl_abi_root, "include"))
+            add_linkdirs(path.join(android_openssl_abi_root, "lib"))
+        end
+    end
+    add_defines("PLATFORM_CONFIG_H=\"config.h\"", "LIBARCHIVE_STATIC", "__LIBARCHIVE_BUILD")
+    if is_plat("windows") then
+        add_defines("_CRT_SECURE_NO_WARNINGS", "_WIN32_WINNT=0x0601")
+    elseif is_plat("android") then
+        add_defines("_GNU_SOURCE")
+    else
+        add_defines("_GNU_SOURCE")
+    end
+    if is_plat("android") then
+        add_cflags("-fPIC", {force = true})
+    end
+    add_packages("zlib", "zstd", "xz", "bzip2", {public = true})
 
 target("starryagent")
-    set_kind("binary")
+    if is_plat("android") then
+        add_rules("qt.shared")
+        set_kind("shared")
+        add_cxflags("-fPIC", {force = true})
+        on_config(function (target)
+            target:set("rpathdirs", {})
+            target:add("ldflags", "-Wl,--disable-new-dtags", "-Wl,--rpath=''", {force = true})
+            target:add("shflags", "-Wl,--disable-new-dtags", "-Wl,--rpath=''", {force = true})
+        end)
+    else
+        add_rules("qt.quickapp")
+        set_kind("binary")
+    end
     add_files("src/main.cpp")
     add_files("src/core/Config.cpp", "src/core/Settings.cpp", "src/core/ProcessMemoryLimiter.cpp", "src/core/DebugTrace.cpp", "src/core/AutoStartManager.cpp")
     add_files("src/core/Config.h", "src/core/Settings.h", "src/core/ProcessMemoryLimiter.h", "src/core/DebugTrace.h", "src/core/AutoStartManager.h")   -- moc (Q_OBJECT)
-    add_files("src/theme/ThemeMetadata.cpp", "src/theme/ThemeLoader.cpp", "src/theme/ThemeManager.cpp")
+    add_files("src/theme/ThemeMetadata.cpp", "src/theme/ThemeManager.cpp", "src/theme/ThemeLoader.cpp")
     add_files("src/theme/ThemeManager.h") -- moc (Q_OBJECT)
     add_files("src/api/SseParser.cpp", "src/api/StreamAssembler.cpp",
               "src/api/ToolCallRecognizer.cpp", "src/api/OpenAIClient.cpp",
@@ -64,7 +195,9 @@ target("starryagent")
     add_files("src/ui/CodeHighlighter.cpp", "src/ui/CodeHighlighter.h") -- moc (Q_OBJECT)
     add_files("src/ui/ToastProxy.cpp", "src/ui/ToastProxy.h") -- moc (Q_OBJECT)
     add_files("src/ui/ToastService.cpp", "src/ui/ToastService.h") -- moc (Q_OBJECT)
-    add_files("src/ui/TrayController.cpp", "src/ui/TrayController.h") -- moc (Q_OBJECT)
+    if not is_plat("android") then
+        add_files("src/ui/TrayController.cpp", "src/ui/TrayController.h") -- moc (Q_OBJECT)
+    end
     if not is_plat("android") then
         add_files("external/qt-toast/msgtoast.cpp")
         add_files("external/qt-toast/msgtoast.h") -- moc (Q_OBJECT)
@@ -99,92 +232,17 @@ target("starryagent")
     if not is_plat("android") then
         add_frameworks("QtWidgets")
     end
+    add_packages("nlohmann_json", "sqlite3")
     if not is_plat("android") then
-        add_packages("nlohmann_json", "libcurl", "sqlite3", "libarchive")
-    else
-        add_packages("nlohmann_json", "sqlite3", "libarchive")
+        add_packages("libcurl")
     end
+    add_deps("libarchive_vendor")
 
--- On Android, fonts are loaded directly from assets (no rcc to avoid OOM)
--- Sync all .ttf from src/ui/fonts/ to the Android build's assets/fonts/ after build.
-if is_plat("android") then
     after_build(function (target)
-        local proj = os.projectdir()
-        local src = path.join(proj, "src/ui/fonts")
-        local dst = path.join(proj, "build/.qt/app/android/starryagent/android-build/assets/fonts")
-        if os.isdir(dst) then
-            os.cp(path.join(src, "*.ttf"), dst)
-        end
-
-        local android_build = path.join(proj, "build/.qt/app/android/starryagent/android-build")
-        if not os.isdir(android_build) then
-            return
-        end
-
-        local java_root = path.join(android_build, "java", "org", "qtproject", "example", "starryagent", "shizuku")
-        local aidl_root = path.join(android_build, "src", "org", "qtproject", "example", "starryagent", "shizuku")
-        os.rm(path.join(android_build, "src", "org"))
-        os.rm(path.join(android_build, "src", "qtproject"))
-        os.rm(path.join(android_build, "src", "example"))
-        os.rm(path.join(android_build, "src", "starryagent"))
-        os.rm(path.join(android_build, "src", "shizuku"))
-        os.rm(path.join(android_build, "src", "ShizukuRunner.java"))
-        os.rm(path.join(android_build, "src", "StarryShellService.java"))
-        os.rm(path.join(android_build, "src", "IStarryShellService.aidl"))
-        os.rm(path.join(android_build, "java", "org"))
-        os.rm(path.join(android_build, "aidl", "org"))
-        os.rm(path.join(android_build, "src", "org"))
-
-        local java_src = path.join(proj, "android", "java")
-        local aidl_src = path.join(proj, "android", "aidl")
-        if os.isdir(java_src) then
-            os.mkdir(java_root)
-            os.cp(path.join(java_src, "org", "qtproject", "example", "starryagent", "shizuku", "*.java"), java_root)
-        end
-        if os.isdir(aidl_src) then
-            os.mkdir(aidl_root)
-            os.cp(path.join(aidl_src, "org", "qtproject", "example", "starryagent", "shizuku", "*.aidl"), aidl_root)
-        end
-
-        local gradle_file = path.join(android_build, "build.gradle")
-        if os.isfile(gradle_file) then
-            local gradle = io.readfile(gradle_file)
-            if gradle and not gradle:find("dev%.rikka%.shizuku:api:13%.1%.5", 1, false) then
-                gradle = gradle:gsub("implementation 'androidx.core:core:1.13.1'",
-                    "implementation 'androidx.core:core:1.13.1'\n    implementation 'androidx.annotation:annotation:1.8.2'\n    implementation 'dev.rikka.shizuku:api:13.1.5'\n    implementation 'dev.rikka.shizuku:provider:13.1.5'")
-            end
-            if gradle and not gradle:find("buildFeatures%s*%{", 1, false) then
-                gradle = gradle:gsub("android%s*%{",
-                    "android {\n    buildFeatures {\n        aidl true\n        buildConfig true\n    }", 1)
-            end
-            io.writefile(gradle_file, gradle)
-        end
-
-        local manifest_file = path.join(android_build, "AndroidManifest.xml")
-        if os.isfile(manifest_file) then
-            local manifest = io.readfile(manifest_file)
-            if manifest and not manifest:find("rikka%.shizuku%.ShizukuProvider", 1, false) then
-                local provider = [[
-
-        <provider
-            android:name="rikka.shizuku.ShizukuProvider"
-            android:authorities="${applicationId}.shizuku"
-            android:enabled="true"
-            android:exported="true"
-            android:multiprocess="false"
-            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />]]
-                manifest = manifest:gsub("</application>", provider .. "\n    </application>", 1)
-                io.writefile(manifest_file, manifest)
-            end
+        local data_src = path.join(os.projectdir(), "external", "syntax-highlighting", "data")
+        if os.isdir(data_src) then
+            local data_dst = path.join(target:targetdir(), "syntax-highlighting-data")
+            os.rm(data_dst)
+            os.cp(data_src, data_dst)
         end
     end)
-end
-
-after_build(function (target)
-    local data_src = path.join(os.projectdir(), "external", "syntax-highlighting", "data")
-    if os.isdir(data_src) then
-        local data_dst = path.join(target:targetdir(), "syntax-highlighting-data")
-        os.rm(data_dst)
-        os.cp(data_src, data_dst)
-    end
-end)
