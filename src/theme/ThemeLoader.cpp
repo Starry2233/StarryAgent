@@ -64,6 +64,7 @@ QString localPathFromUrlOrPath(const QString &value)
         return url.toLocalFile();
     return value;
 }
+
 } // namespace
 
 bool ThemeLoader::extractTheme(const QString &archivePath,

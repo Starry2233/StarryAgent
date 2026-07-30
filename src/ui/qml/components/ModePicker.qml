@@ -61,15 +61,47 @@ Item {
             x: physX
             y: physY
 
-            Text {
+            Item {
                 id: star
                 anchors.centerIn: parent
-                text: ["\u2726\uFE0E", "\u2727\uFE0E", "\u2731\uFE0E", "\u2732\uFE0E", "\u2733\uFE0E"][index % 5]
-                color: theme.accent(0.15 + Math.random() * 0.12)
-                font.family: theme.fontDisplay
-                font.pixelSize: 12 + Math.random() * 16
+                width: 10 + Math.random() * 14
+                height: width
                 opacity: 0
                 property real targetOpacity: 0.4 + Math.random() * 0.35
+                readonly property color starColor: theme.accent(0.15 + Math.random() * 0.12)
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: Math.max(1, star.width * 0.11)
+                    height: star.height
+                    radius: width / 2
+                    color: star.starColor
+                }
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: star.width
+                    height: Math.max(1, star.height * 0.11)
+                    radius: height / 2
+                    color: star.starColor
+                }
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: Math.max(1, star.width * 0.08)
+                    height: star.height * 0.72
+                    radius: width / 2
+                    color: star.starColor
+                    rotation: 45
+                    opacity: 0.72
+                }
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: Math.max(1, star.width * 0.08)
+                    height: star.height * 0.72
+                    radius: width / 2
+                    color: star.starColor
+                    rotation: -45
+                    opacity: 0.72
+                }
 
                 Component.onCompleted: {
                     fadeInDelay.start()

@@ -370,10 +370,13 @@ Item {
         color: theme.pageOverlay
     }
 
-    Components.PaperGrain {
+    Loader {
         anchors.fill: parent
-        dark: theme.dark
-        intensity: 0.018
+        active: Qt.platform.os !== "android"
+        sourceComponent: Components.PaperGrain {
+            dark: theme.dark
+            intensity: 0.018
+        }
     }
 
     CameraCaptureWindow {

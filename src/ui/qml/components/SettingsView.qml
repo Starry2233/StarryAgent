@@ -22,10 +22,13 @@ Item {
         color: theme.pageOverlay
     }
 
-    Components.PaperGrain {
+    Loader {
         anchors.fill: parent
-        dark: theme.dark
-        intensity: 0.018
+        active: Qt.platform.os !== "android"
+        sourceComponent: Components.PaperGrain {
+            dark: theme.dark
+            intensity: 0.018
+        }
     }
 
     // --- Header bar ---
@@ -862,8 +865,11 @@ Item {
                 spacing: theme.sp2
 
                 ThemeButton {
-                    text: qsTr("Install theme package")
+                    text: Qt.platform.os === "android"
+                          ? qsTr("Theme packages unsupported")
+                          : qsTr("Install theme package")
                     variant: "primary"
+                    enabled: Qt.platform.os !== "android"
                     onClicked: {
                         const path = filePicker.pickThemePackage()
                         if (path && path.length > 0)
@@ -874,11 +880,14 @@ Item {
                 Text {
                     width: parent.width - 220
                     anchors.verticalCenter: parent.verticalCenter
-                    text: qsTr("Current: %1").arg(themeManager.currentThemeId)
+                    text: Qt.platform.os === "android"
+                          ? qsTr("Android does not support theme packages.")
+                          : qsTr("Current: %1").arg(themeManager.currentThemeId)
                     color: theme.inkSoft
                     font.family: theme.fontMono
                     font.pixelSize: 11
                     elide: Text.ElideRight
+                    wrapMode: Text.Wrap
                 }
             }
 

@@ -416,9 +416,16 @@ QJsonArray Conversation::buildMessagesFromRow(int startRow) const
                 "approval. This scheduled execution turn has full tool "
                 "permissions by default, regardless of whether bypass "
                 "permissions is enabled in settings. Complete the task, use "
-                "tools when needed, then report the concrete execution "
-                "result in your final response.\n\nTask being executed "
-                "right now:\n%1")
+                "tools when needed, then report only the concrete execution "
+                "result for this run. Do not say the task was just set, do "
+                "not say it will trigger later, do not restate the schedule, "
+                "and do not acknowledge task creation success. Treat the "
+                "schedule as already elapsed and the trigger as already "
+                "happened. When carrying out this scheduled task, use the "
+                "current local date/time from the system prompt as the "
+                "authoritative current time for this run, and explicitly take "
+                "that current time into account if the task depends on timing "
+                "or schedule context.\n\nTask being executed right now:\n%1")
                 .arg(m_scheduledInstruction));
         out.append(scheduled);
 
@@ -427,11 +434,16 @@ QJsonArray Conversation::buildMessagesFromRow(int startRow) const
         scheduledAnchor.insert(
             "content",
             QStringLiteral(
-                "This turn is a scheduled-task execution turn. There is no "
-                "new user reply to answer right now. Please execute the "
-                "already-triggered task described by the system prompt and "
-                "reply with the concrete execution result for this run."));
-        out.append(scheduledAnchor);
+                "This turn is a scheduled-task execution turn. The scheduled "
+                "task was created earlier and has already triggered. This is "
+                "not a task-creation request, not a scheduling confirmation, "
+                "and not a future reminder setup. There is no new user reply "
+                "to answer right now. Do not say the task was just set, do "
+                "not say it will trigger later, do not repeat the schedule, "
+                "and do not acknowledge creation success. Treat the trigger "
+                "as already happened, execute the already-triggered task "
+                "described by the system prompt, and reply only with the "
+                "concrete execution result for this run."));        out.append(scheduledAnchor);
     }
     if (!m_compactSummary.trimmed().isEmpty())
     {

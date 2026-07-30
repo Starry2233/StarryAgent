@@ -169,7 +169,10 @@ ThemeMetadata ThemeMetadata::builtIn()
         {QStringLiteral("clay"), QStringLiteral("#C2502A")},
         {QStringLiteral("clayDeep"), QStringLiteral("#9E3D1F")},
         {QStringLiteral("moss"), QStringLiteral("#4A5340")},
-        {QStringLiteral("shadowColor"), QStringLiteral("#1C140F")}};
+        {QStringLiteral("shadowColor"), QStringLiteral("#1C140F")},
+        {QStringLiteral("userBubble"), QStringLiteral("#7C5A47")},
+        {QStringLiteral("userBubbleBorder"), QStringLiteral("#654635")},
+        {QStringLiteral("userBubbleText"), QStringLiteral("#FFFFFF")}};
     theme.colorsDark = {
         {QStringLiteral("paper"), QStringLiteral("#1A1714")},
         {QStringLiteral("surface"), QStringLiteral("#221E19")},
@@ -180,7 +183,10 @@ ThemeMetadata ThemeMetadata::builtIn()
         {QStringLiteral("clay"), QStringLiteral("#D2693A")},
         {QStringLiteral("clayDeep"), QStringLiteral("#B0542E")},
         {QStringLiteral("moss"), QStringLiteral("#76815F")},
-        {QStringLiteral("shadowColor"), QStringLiteral("#000000")}};
+        {QStringLiteral("shadowColor"), QStringLiteral("#000000")},
+        {QStringLiteral("userBubble"), QStringLiteral("#342015")},
+        {QStringLiteral("userBubbleBorder"), QStringLiteral("#24160F")},
+        {QStringLiteral("userBubbleText"), QStringLiteral("#FFFFFF")}};
     theme.fonts = {{QStringLiteral("display"), QStringLiteral("Fraunces")},
                    {QStringLiteral("body"), QStringLiteral("Hanken Grotesk")},
                    {QStringLiteral("mono"), QStringLiteral("IBM Plex Mono")}};

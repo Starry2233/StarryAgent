@@ -10,10 +10,14 @@
 #include <QFontDatabase>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLibrary>
 #include <QProcessEnvironment>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
+#include <QQuickWindow>
+#include <QSGRendererInterface>
+#include <QSurfaceFormat>
 #include <QStringList>
 #include <QTextStream>
 #include <QTimer>
@@ -50,9 +54,24 @@
 #pragma comment(lib, "dwmapi.lib")
 #endif
 
+#include <cstdio>
+#include <iostream>
+
 #ifdef Q_OS_WIN
 namespace
 {
+void attachWindowsParentConsole()
+{
+    if (!AttachConsole(ATTACH_PARENT_PROCESS) && GetLastError() != ERROR_ACCESS_DENIED)
+        return;
+
+    FILE *stream = nullptr;
+    freopen_s(&stream, "CONOUT$", "w", stdout);
+    freopen_s(&stream, "CONOUT$", "w", stderr);
+    std::cout.clear();
+    std::cerr.clear();
+}
+
 void applyWindowsDarkTitleBar(QWindow *window, bool dark)
 {
     if (!window)
@@ -89,6 +108,9 @@ void applyThemeToTopLevelWindows(const QList<QObject *> &objects, bool dark)
 
 int main(int argc, char *argv[])
 {
+#ifdef Q_OS_WIN
+    attachWindowsParentConsole();
+#endif
     QStringList rawArgs;
     int maxRenderPageSize = 420;
     QString requestedRhi;
@@ -193,7 +215,7 @@ int main(int argc, char *argv[])
         return true;
     };
 
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN) || defined(Q_OS_ANDROID)
     const bool hasExplicitRhiEnv =
         QProcessEnvironment::systemEnvironment().contains(
             QStringLiteral("QSG_RHI_BACKEND"));
@@ -204,14 +226,30 @@ int main(int argc, char *argv[])
     }
     else if (!hasExplicitRhiEnv)
     {
+#ifdef Q_OS_ANDROID
+        qputenv("QT_QUICK_BACKEND", QByteArrayLiteral("software"));
+        qputenv("QMLSCENE_DEVICE", QByteArrayLiteral("softwarecontext"));
+        qputenv("QSG_RHI_BACKEND", QByteArrayLiteral("software"));
+        QQuickWindow::setGraphicsApi(QSGRendererInterface::Software);
+        requestedRhi = QStringLiteral("software");
+#else
         qputenv("QSG_RHI_BACKEND", QByteArrayLiteral("opengl"));
         requestedRhi = QStringLiteral("opengl");
+#endif
     }
     else
     {
         requestedRhi = QString::fromLocal8Bit(qgetenv("QSG_RHI_BACKEND"))
                            .trimmed()
                            .toLower();
+#ifdef Q_OS_ANDROID
+        if (requestedRhi == QStringLiteral("software"))
+        {
+            qputenv("QT_QUICK_BACKEND", QByteArrayLiteral("software"));
+            qputenv("QMLSCENE_DEVICE", QByteArrayLiteral("softwarecontext"));
+            QQuickWindow::setGraphicsApi(QSGRendererInterface::Software);
+        }
+#endif
     }
 #else
     if (!requestedRhi.isEmpty() && !applyRhiBackend(requestedRhi))
@@ -226,12 +264,25 @@ int main(int argc, char *argv[])
                        .arg(requestedRhi.isEmpty() ? QStringLiteral("(default)")
                                                    : requestedRhi));
 
+#ifdef Q_OS_ANDROID
+    QSurfaceFormat format;
+    format.setRenderableType(QSurfaceFormat::OpenGLES);
+    format.setVersion(2, 0);
+    format.setProfile(QSurfaceFormat::NoProfile);
+    QSurfaceFormat::setDefaultFormat(format);
+#endif
+
     QCoreApplication::setOrganizationName("StarryAgent");
     QCoreApplication::setApplicationName("StarryAgent");
 #ifdef Q_OS_ANDROID
     QGuiApplication app(argc, argv);
 #else
     QApplication app(argc, argv);
+#endif
+
+#ifdef Q_OS_ANDROID
+    qputenv("QT_OPENSSL_LIBS", QByteArrayLiteral("libssl.so:libcrypto.so"));
+    qputenv("QT_OPENSSL_PREFIX", QByteArrayLiteral("/data/data/moe.starry2233.StarryAgent/lib/x86_64"));
 #endif
 
     DebugTrace::setupAutoExit(&app, 60000);
@@ -367,18 +418,24 @@ int main(int argc, char *argv[])
     conversations.setScheduledTaskManager(&scheduledTasks);
     toolRegistry.setScheduledTaskManager(&scheduledTasks);
     ClipboardProxy clipboard;
+#ifndef Q_OS_ANDROID
     TrayController trayController(&settings);
+#endif
+#ifndef Q_OS_ANDROID
     DesktopSelectionWindow desktopSelectionWindow;
+#endif
     CameraBridge cameraBridge;
     FilePicker filePicker;
     ImageTransferService imageTransfer;
     CodeHighlighter codeHighlighter;
     ToastProxy toast;
+#ifndef Q_OS_ANDROID
     QObject::connect(
         &scheduledTasks, &ScheduledTaskManager::taskNotification,
         &trayController,
         [&trayController](const QString &title, const QString &message)
         { trayController.showSystemNotification(title, message); });
+#endif
 
     // Dev/demo mode: --demo injects fake turns into the active conversation
     // (content delta, tool call) so the ChatView + ToolCallCard state machine
@@ -447,8 +504,10 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("scheduledTasks", &scheduledTasks);
     engine.rootContext()->setContextProperty("markdownParser", &markdownParser);
     engine.rootContext()->setContextProperty("clipboard", &clipboard);
+#ifndef Q_OS_ANDROID
     engine.rootContext()->setContextProperty("desktopSelectionWindow",
                                              &desktopSelectionWindow);
+#endif
     engine.rootContext()->setContextProperty("cameraBridge", &cameraBridge);
     engine.rootContext()->setContextProperty("filePicker", &filePicker);
     engine.rootContext()->setContextProperty("imageTransfer", &imageTransfer);
@@ -465,7 +524,11 @@ int main(int argc, char *argv[])
     if (engine.rootObjects().isEmpty())
         return -1;
     if (auto *window = qobject_cast<QWindow *>(engine.rootObjects().constFirst()))
+    {
+#ifndef Q_OS_ANDROID
         trayController.attach(&app, window);
+#endif
+    }
 
 #ifdef Q_OS_WIN
     applyThemeToTopLevelWindows(engine.rootObjects(),
