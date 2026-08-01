@@ -28,6 +28,16 @@ Item {
                 wrapMode: Text.Wrap
             }
 
+            Text {
+                visible: Qt.platform.os === "android"
+                width: parent.width
+                text: qsTr("Android 设备还需要允许后台运行、电池优化例外，部分厂商还会额外限制自启动。去 设置 > 常规 > Background Runtime 里申请标准权限；如果仍然无效，请参照 Don’t Kill My App。")
+                color: theme.inkSoft
+                font.family: theme.fontBody
+                font.pixelSize: 12
+                wrapMode: Text.Wrap
+            }
+
             ToggleRow {
                 title: qsTr("全局定时任务")
                 description: qsTr("开关关闭时，所有定时任务暂停；开启后按计划继续运行。")

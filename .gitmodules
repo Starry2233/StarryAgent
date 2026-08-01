@@ -4,3 +4,6 @@
 [submodule "external/syntax-highlighting"]
 	path = external/syntax-highlighting
 	url = https://github.com/Starry2233/syntax-highlighting
+[submodule "external/libarchive"]
+	path = external/libarchive
+	url = https://github.com/Starry2233/libarchive

@@ -60,12 +60,14 @@ class Conversation : public QAbstractListModel
     {
         QString kind;       // "user" | "assistant" | "tool"
         QString text;       // user/assistant text
+        QString reasoningText; // assistant-only provider reasoning payload
         QString toolCallId; // tool items
         QString toolName;
         QString argsText; // pretty JSON for display + OpenAI arguments
         QString status;   // composing/pending/running/done/denied/error
         QString result;   // tool result content
         bool needsApproval = true;
+        bool complete = true;
         QStringList imagePaths; // imported local images for user messages
     };
 
@@ -126,6 +128,7 @@ class Conversation : public QAbstractListModel
                                           const QStringList &imagePaths);
     Q_INVOKABLE void appendAssistant(); // empty row, streaming into it
     Q_INVOKABLE void appendAssistantText(const QString &text);
+    Q_INVOKABLE void appendAssistantReasoningDelta(const QString &delta);
     Q_INVOKABLE void appendAssistantDelta(const QString &delta);
     Q_INVOKABLE void appendCompactBoundary(const QString &text);
     Q_INVOKABLE void appendToolCall(const QString &toolCallId,
@@ -202,6 +205,7 @@ class Conversation : public QAbstractListModel
 
     // Signal handlers (connected to m_client / m_registry).
     void onClientDelta(const QString &text);
+    void onClientReasoningDelta(const QString &text);
     void onClientComposing(const QString &id, const QString &name);
     void onClientToolName(const QString &id, const QString &name);
     void onClientReady(const QString &id, const QString &name,
@@ -216,6 +220,8 @@ class Conversation : public QAbstractListModel
     bool hasUnresolvedToolCalls() const;
     void finishScheduledTask(bool success);
     bool schedulingToolsAvailableForCurrentTurn() const;
+    void scheduleAssistantDeltaFlush();
+    void flushPendingAssistantDeltas();
 
     QString m_id;
     QString m_title;
@@ -236,6 +242,7 @@ class Conversation : public QAbstractListModel
     OpenAIClient *m_client = nullptr;
     bool m_pendingResend =
         false; // tool finished before the stream's finished() — defer resend
+    bool m_clientFinished = true;
     QString m_attachmentsDir;
     QString m_planFilePath;
     QString m_defaultWorkdir;
@@ -245,4 +252,7 @@ class Conversation : public QAbstractListModel
     bool m_compactRetryAttempted = false;
     QString m_scheduledTaskId;
     QString m_scheduledInstruction;
+    QString m_pendingAssistantText;
+    QString m_pendingAssistantReasoningText;
+    bool m_assistantDeltaFlushScheduled = false;
 };

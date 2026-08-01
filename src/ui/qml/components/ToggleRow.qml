@@ -9,6 +9,7 @@ Item {
     property string title: ""
     property string description: ""
     property bool checked: false
+    property bool enabled: true
 
     signal toggled(bool checked)
 
@@ -25,13 +26,14 @@ Item {
 
         Text {
             text: root.title
-            color: theme.ink
+            color: root.enabled ? theme.ink : theme.inkSoft
             font.family: theme.fontBody
             font.pixelSize: 13
         }
         Text {
             text: root.description
             color: theme.inkSoft
+            opacity: root.enabled ? 1 : 0.55
             font.family: theme.fontBody
             font.pixelSize: 11
             width: parent.width
@@ -44,6 +46,7 @@ Item {
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         checked: root.checked
+        enabled: root.enabled
         onToggled: root.toggled(checked)
     }
 }

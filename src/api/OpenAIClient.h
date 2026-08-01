@@ -66,6 +66,7 @@ class OpenAIClient : public QObject
   signals:
     // A text fragment for the live assistant message. Append to your chat view.
     void contentDelta(const QString &text);
+    void reasoningDelta(const QString &text);
     // A tool call has STARTED streaming its arguments. Do NOT execute. Render
     // as a "composing" card.
     void toolCallComposing(const QString &id, const QString &name);
@@ -85,6 +86,9 @@ class OpenAIClient : public QObject
   private:
     void wirePipeline();
     void runRequest(const std::string &body);
+    void handleStreamingPayload(const std::string &data);
+    void emitReasoningFromMessage(const nlohmann::json &message);
+    void parseToolCallsFromMessage(const nlohmann::json &message);
     void logVerboseRequest(const std::string &url, const std::string &body,
                            int messageCount, int toolCount) const;
     void logVerboseResponse(const char *phase, const std::string &body) const;

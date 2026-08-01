@@ -1,0 +1,24 @@
+# Project-wide Gradle settings.
+org.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=768m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8
+org.gradle.parallel=true
+
+android.useAndroidX=true
+androidBuildToolsVersion=@@ANDROID_BUILD_TOOLS_VERSION@@
+androidCompileSdkVersion=@@ANDROID_COMPILE_SDK_VERSION@@
+androidNdkVersion=@@ANDROID_NDK_VERSION@@
+androidPackageName=@@ANDROID_PACKAGE_NAME@@
+buildDir=build
+qt5AndroidDir=@@QT_ANDROID_DIR@@
+qtAndroidDir=@@QT_ANDROID_DIR@@
+qtJarDir=@@QT_JAR_DIR@@
+qtGradlePluginType=com.android.application
+qtMinSdkVersion=@@ANDROID_MIN_SDK_VERSION@@
+qtTargetAbiList=@@QT_TARGET_ABI_LIST@@
+qtTargetSdkVersion=@@ANDROID_TARGET_SDK_VERSION@@
+
+# Signing credentials injected by build_android_gradle.ps1.
+# Override at runtime with -KeystoreFile / -KeystoreStorePass / -KeystoreAlias / -KeystoreKeyPass.
+starryKeystoreFile=@@STARRY_KEYSTORE_FILE@@
+starryKeystoreStorePass=@@STARRY_KEYSTORE_STORE_PASS@@
+starryKeystoreAlias=@@STARRY_KEYSTORE_ALIAS@@
+starryKeystoreKeyPass=@@STARRY_KEYSTORE_KEY_PASS@@

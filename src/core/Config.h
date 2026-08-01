@@ -32,8 +32,8 @@ class Config : public QObject
     QString rootDir() const { return m_rootDir; }
     bool firstLaunch() const { return m_rootDir.isEmpty(); }
 
-    // Preset roots offered on first launch (Windows-adapted; PLAN's three
-    // /sdcard choices are Android-only).
+    // Preset roots offered on first launch. Android gets app-private,
+    // Android/data/<pkg>/files, and shared internal storage choices.
     Q_INVOKABLE QString defaultRoot() const;
     Q_INVOKABLE QStringList presetRoots() const;
 

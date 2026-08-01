@@ -8,6 +8,10 @@
 #include <QThread>
 #include <QTimer>
 
+#ifdef Q_OS_ANDROID
+#include <android/log.h>
+#endif
+
 bool DebugTrace::s_verboseEnabled = false;
 QString DebugTrace::s_logType;
 
@@ -55,6 +59,14 @@ void messageHandler(QtMsgType type, const QMessageLogContext &context,
        << "[tid " << reinterpret_cast<quintptr>(QThread::currentThreadId())
        << "] " << file << ':' << context.line << ' ' << message << Qt::endl;
     ts.flush();
+#ifdef Q_OS_ANDROID
+    __android_log_print(type == QtWarningMsg ? ANDROID_LOG_WARN
+                                             : type == QtCriticalMsg ||
+                                                       type == QtFatalMsg
+                                                   ? ANDROID_LOG_ERROR
+                                                   : ANDROID_LOG_INFO,
+                        "StarryAgent", "%s", qPrintable(message));
+#endif
     if (type == QtFatalMsg)
         abort();
 }
@@ -102,11 +114,13 @@ void DebugTrace::applyVerboseQtEnvironment()
     qputenv(
         "QT_LOGGING_RULES",
         QByteArrayLiteral("*.debug=true;qt.*.debug=true;qt.qml.debug=true;qt."
-                          "quick.*=true;qt.scenegraph.*=true;qt.rhi.*=true"));
+                          "qml.*=true;qt.quick.*=true;qt.scenegraph.*=true;qt."
+                          "rhi.*=true"));
     qputenv("QT_FORCE_STDERR_LOGGING", QByteArrayLiteral("1"));
     qputenv("QSG_INFO", QByteArrayLiteral("1"));
     qputenv("QSG_RENDERER_DEBUG", QByteArrayLiteral("render"));
     qputenv("QSG_RHI_PROFILE", QByteArrayLiteral("1"));
+    qputenv("QML_IMPORT_TRACE", QByteArrayLiteral("1"));
 }
 
 void DebugTrace::setupAutoExit(QCoreApplication *app, int milliseconds)

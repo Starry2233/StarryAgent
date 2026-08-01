@@ -75,7 +75,16 @@ Item {
                         anchors.rightMargin: theme.sp4
                         spacing: 2
                         Text {
-                            text: isRecommended ? qsTr("Recommended") : (index === 1 ? qsTr("Home folder") : qsTr("Documents"))
+                            text: {
+                                if (Qt.platform.os === "android") {
+                                    if (index === 0)
+                                        return qsTr("App private")
+                                    if (index === 1)
+                                        return qsTr("Android/data")
+                                    return qsTr("Shared internal storage")
+                                }
+                                return isRecommended ? qsTr("Recommended") : (index === 1 ? qsTr("Home folder") : qsTr("Documents"))
+                            }
                             color: isRecommended ? theme.clay : theme.inkSoft
                             font.family: theme.fontBody
                             font.pixelSize: 10

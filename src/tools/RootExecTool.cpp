@@ -45,9 +45,9 @@ QString RootExecTool::execute(const json &args)
     p.setWorkingDirectory(workdir);
 
 #ifdef Q_OS_WIN
-    // Windows: use `runas` to launch cmd.exe with elevated privileges.
+    // Windows: use pwsh to launch cmd.exe with elevated privileges.
     // Note: this requires a UAC prompt and user confirmation.
-    const QString program = QStringLiteral("powershell.exe");
+    const QString program = QStringLiteral("pwsh");
     QStringList shellArgs;
     shellArgs << QStringLiteral("-Command")
               << (QStringLiteral(

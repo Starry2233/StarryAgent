@@ -15,6 +15,30 @@ Item {
     id: root
     property int selectedTab: 0
     property string themeUiError: ""
+    property int developerTapCount: 0
+    readonly property bool developerSettingsVisibleThisSession: developerSettingsUnlockedAtStartup
+    property bool developerSettingsUnlockedAtStartup: false
+    property bool developerSettingsDraftEnabled: settings.developerSettingsEnabled
+    property bool developerThemeOnAndroidDraftEnabled: settings.developerThemeOnAndroidEnabled
+    property string androidBackgroundStatusMessage: ""
+    readonly property bool developerSettingsDirty:
+        developerSettingsDraftEnabled !== settings.developerSettingsEnabled ||
+        developerThemeOnAndroidDraftEnabled !== settings.developerThemeOnAndroidEnabled
+
+    function resetDeveloperDraftsToSaved() {
+        developerSettingsDraftEnabled = settings.developerSettingsEnabled
+        developerThemeOnAndroidDraftEnabled = settings.developerThemeOnAndroidEnabled
+    }
+
+    function resetDeveloperDraftsToDefaults() {
+        developerSettingsDraftEnabled = false
+        developerThemeOnAndroidDraftEnabled = false
+    }
+
+    Component.onCompleted: {
+        developerSettingsUnlockedAtStartup = settings.developerSettingsUnlocked
+        resetDeveloperDraftsToSaved()
+    }
 
     // page surface
     Rectangle {
@@ -22,10 +46,13 @@ Item {
         color: theme.pageOverlay
     }
 
-    Components.PaperGrain {
+    Loader {
         anchors.fill: parent
-        dark: theme.dark
-        intensity: 0.018
+        active: Qt.platform.os !== "android"
+        sourceComponent: Components.PaperGrain {
+            dark: theme.dark
+            intensity: 0.018
+        }
     }
 
     // --- Header bar ---
@@ -668,6 +695,113 @@ Item {
                 onToggled: settings.closeToTray = checked
             }
 
+            Rectangle {
+                visible: Qt.platform.os === "android"
+                width: parent.width
+                height: androidBackgroundColumn.implicitHeight + theme.sp4 * 2
+                radius: theme.rMd
+                color: theme.surface
+                border.color: theme.line
+                border.width: 1
+
+                Column {
+                    id: androidBackgroundColumn
+                    width: parent.width - theme.sp4 * 2
+                    anchors.top: parent.top
+                    anchors.topMargin: theme.sp4
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: theme.sp3
+
+                    Text {
+                        text: qsTr("Background Runtime")
+                        color: theme.inkSoft
+                        font.family: theme.fontBody
+                        font.pixelSize: 10
+                        font.letterSpacing: 1
+                        font.capitalization: Font.AllUppercase
+                    }
+
+                    Text {
+                        width: parent.width
+                        text: androidBackgroundRuntime.batteryOptimizationIgnored
+                              ? qsTr("Battery optimization is already disabled for StarryAgent.")
+                              : qsTr("Allow unrestricted background running so scheduled tasks and long tool calls are less likely to be paused.")
+                        color: theme.ink
+                        font.family: theme.fontBody
+                        font.pixelSize: 13
+                        font.weight: Font.Medium
+                        wrapMode: Text.Wrap
+                    }
+
+                    Text {
+                        width: parent.width
+                        text: qsTr("Android only offers the standard battery-optimization exemption and app settings pages. Some OEM ROMs still block startup or background execution.")
+                        color: theme.inkSoft
+                        font.family: theme.fontBody
+                        font.pixelSize: 12
+                        wrapMode: Text.Wrap
+                    }
+
+                    Flow {
+                        width: parent.width
+                        spacing: theme.sp2
+
+                        ThemeButton {
+                            text: androidBackgroundRuntime.batteryOptimizationIgnored
+                                  ? qsTr("Refresh status")
+                                  : qsTr("Allow background running")
+                            variant: "primary"
+                            onClicked: {
+                                if (androidBackgroundRuntime.batteryOptimizationIgnored)
+                                    androidBackgroundRuntime.refreshBatteryOptimizationState()
+                                else
+                                    androidBackgroundRuntime.requestIgnoreBatteryOptimizations()
+                            }
+                        }
+
+                        ThemeButton {
+                            text: qsTr("Open app settings")
+                            onClicked: androidBackgroundRuntime.openBackgroundSettings()
+                        }
+                    }
+
+                    Text {
+                        width: parent.width
+                        text: qsTr("If your phone still kills the app, check vendor-specific startup and battery steps on Don’t Kill My App.")
+                        color: theme.inkSoft
+                        font.family: theme.fontBody
+                        font.pixelSize: 12
+                        wrapMode: Text.Wrap
+                    }
+
+                    Text {
+                        width: parent.width
+                        text: qsTr("Open Don’t Kill My App")
+                        color: theme.clayDeep
+                        font.family: theme.fontBody
+                        font.pixelSize: 12
+                        font.underline: true
+                        wrapMode: Text.Wrap
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Qt.openUrlExternally("https://dontkillmyapp.com/")
+                        }
+                    }
+
+                    Text {
+                        visible: root.androidBackgroundStatusMessage.length > 0
+                        width: parent.width
+                        text: root.androidBackgroundStatusMessage
+                        color: theme.clay
+                        font.family: theme.fontBody
+                        font.pixelSize: 12
+                        wrapMode: Text.Wrap
+                    }
+                }
+            }
+
             // ================= Appearance =================
             Text {
                 text: qsTr("Appearance")
@@ -758,7 +892,16 @@ Item {
                         Text {
                             anchors.centerIn: parent
                             width: parent.width - theme.sp3
-                            text: modelData
+                            text: {
+                                if (Qt.platform.os === "android") {
+                                    if (index === 0)
+                                        return qsTr("App private")
+                                    if (index === 1)
+                                        return qsTr("Android/data")
+                                    return qsTr("Shared storage")
+                                }
+                                return modelData
+                            }
                             color: config.rootDir === modelData ? theme.clayDeep : theme.inkSoft
                             font.family: theme.fontMono
                             font.pixelSize: 10
@@ -792,13 +935,98 @@ Item {
                 font.capitalization: Font.AllUppercase
                 topPadding: theme.sp2
             }
-            Text {
+            Item {
                 width: parent.width
-                color: theme.inkSoft
-                font.family: theme.fontBody
-                font.pixelSize: 11
-                wrapMode: Text.Wrap
-                text: qsTr("StarryAgent 0.1.0 — cross-platform AI agent.\nChanges save automatically.")
+                height: aboutColumn.implicitHeight
+
+                Column {
+                    id: aboutColumn
+                    width: parent.width
+                    spacing: 0
+
+                    Text {
+                        width: parent.width
+                        color: theme.inkSoft
+                        font.family: theme.fontBody
+                        font.pixelSize: 11
+                        wrapMode: Text.Wrap
+                        text: qsTr("StarryAgent 0.3.0-alpha — cross-platform AI agent.\nChanges save automatically.")
+                    }
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        if (settings.developerSettingsUnlocked)
+                            return
+                        root.developerTapCount += 1
+                        if (root.developerTapCount >= 10) {
+                            settings.developerSettingsUnlocked = true
+                            root.themeUiError = qsTr("Developer Settings unlocked. Restart the app to show them.")
+                        }
+                    }
+                }
+            }
+
+            Item {
+                visible: root.developerSettingsVisibleThisSession
+                width: parent.width
+                height: developerSettingsColumn.implicitHeight
+
+                Column {
+                    id: developerSettingsColumn
+                    width: parent.width
+                    spacing: theme.sp3
+
+                    Text {
+                        text: qsTr("Developer Settings")
+                        color: theme.inkSoft
+                        font.family: theme.fontBody
+                        font.pixelSize: 10
+                        font.letterSpacing: 1
+                        font.capitalization: Font.AllUppercase
+                    }
+
+                    ToggleRow {
+                        title: qsTr("Enable Developer Settings")
+                        description: qsTr("Required before Android theme package install can be enabled.")
+                        checked: root.developerSettingsDraftEnabled
+                        onToggled: root.developerSettingsDraftEnabled = checked
+                    }
+
+                    ToggleRow {
+                        visible: Qt.platform.os === "android"
+                        title: qsTr("Enable Theme On Android")
+                        description: qsTr("Allows theme package install on Android after saving.")
+                        checked: root.developerThemeOnAndroidDraftEnabled
+                        enabled: root.developerSettingsDraftEnabled
+                        onToggled: root.developerThemeOnAndroidDraftEnabled = checked
+                    }
+
+                    Row {
+                        spacing: theme.sp2
+
+                        ThemeButton {
+                            text: qsTr("Save")
+                            variant: "primary"
+                            enabled: root.developerSettingsDirty
+                            onClicked: {
+                                settings.developerSettingsEnabled = root.developerSettingsDraftEnabled
+                                settings.developerThemeOnAndroidEnabled = root.developerSettingsDraftEnabled
+                                        ? root.developerThemeOnAndroidDraftEnabled
+                                        : false
+                                root.resetDeveloperDraftsToSaved()
+                                root.themeUiError = qsTr("Developer settings saved.")
+                            }
+                        }
+
+                        ThemeButton {
+                            text: qsTr("Reset")
+                            enabled: root.developerSettingsDraftEnabled || root.developerThemeOnAndroidDraftEnabled
+                            onClicked: root.resetDeveloperDraftsToDefaults()
+                        }
+                    }
+                }
             }
         }
     }
@@ -856,14 +1084,34 @@ Item {
                     root.themeUiError = ""
                 }
             }
+            Connections {
+                target: androidBackgroundRuntime
+                function onBatteryOptimizationIgnoredChanged() {
+                    androidBackgroundRuntime.refreshBatteryOptimizationState()
+                }
+                function onErrorOccurred(message) {
+                    root.androidBackgroundStatusMessage = message
+                    toast.showMessage(message)
+                }
+                function onRequestLaunched(message) {
+                    root.androidBackgroundStatusMessage = message
+                    toast.showMessage(message)
+                }
+            }
 
             Row {
                 width: parent.width
                 spacing: theme.sp2
 
                 ThemeButton {
-                    text: qsTr("Install theme package")
+                    text: Qt.platform.os === "android"
+                          ? (settings.developerSettingsEnabled && settings.developerThemeOnAndroidEnabled
+                             ? qsTr("Install theme package")
+                             : qsTr("Theme packages disabled"))
+                          : qsTr("Install theme package")
                     variant: "primary"
+                    enabled: Qt.platform.os !== "android"
+                             || (settings.developerSettingsEnabled && settings.developerThemeOnAndroidEnabled)
                     onClicked: {
                         const path = filePicker.pickThemePackage()
                         if (path && path.length > 0)
@@ -874,11 +1122,16 @@ Item {
                 Text {
                     width: parent.width - 220
                     anchors.verticalCenter: parent.verticalCenter
-                    text: qsTr("Current: %1").arg(themeManager.currentThemeId)
+                    text: Qt.platform.os === "android"
+                          ? (settings.developerSettingsEnabled && settings.developerThemeOnAndroidEnabled
+                             ? qsTr("Current: %1").arg(themeManager.currentThemeId)
+                             : qsTr("Unlock About, restart, then enable Developer Settings and Theme On Android."))
+                          : qsTr("Current: %1").arg(themeManager.currentThemeId)
                     color: theme.inkSoft
                     font.family: theme.fontMono
                     font.pixelSize: 11
                     elide: Text.ElideRight
+                    wrapMode: Text.Wrap
                 }
             }
 

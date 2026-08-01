@@ -73,9 +73,9 @@ QtObject {
     // family (matches the sparkle avatar mark). Flat fill, no drop shadow; the
     // ChatView disables MultiEffect on this bubble. Text sits on clay at full
     // contrast, border is a deeper clay hairline.
-    property color userBubble:      dark ? clay : clayDeep
-    property color userBubbleText:  dark ? paper : paper
-    property color userBubbleBorder: clayDeep
+    property color userBubble:      colors.userBubble || (dark ? "#342015" : "#7C5A47")
+    property color userBubbleText:  colors.userBubbleText || "#ffffff"
+    property color userBubbleBorder: colors.userBubbleBorder || (dark ? "#24160f" : "#654635")
 
     // soft shadow color (warm, low opacity — no AI blue)
     property color shadowColor: colors.shadowColor || (dark ? Qt.rgba(0, 0, 0, 0.45) : Qt.rgba(0.11, 0.08, 0.05, 0.12))
