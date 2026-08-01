@@ -21,17 +21,13 @@ constexpr qint64 kCopyBlockSize = 64ll * 1024;
 
 bool isInsideDirectory(const QString &baseDir, const QString &candidate)
 {
-    QFileInfo info(candidate);
-    QString base = QFileInfo(baseDir).canonicalFilePath();
-    if (base.isEmpty())
-        base = QDir::cleanPath(QFileInfo(baseDir).absoluteFilePath());
-    QString path = info.exists() ? info.canonicalFilePath()
-                                 : QDir::cleanPath(info.absoluteFilePath());
-    if (base.isEmpty())
+    QString base = QDir::cleanPath(QFileInfo(baseDir).absoluteFilePath());
+    QString path = QDir::cleanPath(QFileInfo(candidate).absoluteFilePath());
+    if (base.isEmpty() || path.isEmpty())
         return false;
 
-    base = QDir::cleanPath(base).replace(QLatin1Char('\\'), QLatin1Char('/'));
-    path = QDir::cleanPath(path).replace(QLatin1Char('\\'), QLatin1Char('/'));
+    base = base.replace(QLatin1Char('\\'), QLatin1Char('/'));
+    path = path.replace(QLatin1Char('\\'), QLatin1Char('/'));
     if (base.endsWith(QLatin1Char('/')))
         base.chop(1);
     const QString baseWithSlash = base + QLatin1Char('/');

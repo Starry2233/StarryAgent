@@ -77,3 +77,5 @@ Desktop.ini
 .doge/
 .claude/
 tmp_repro/
+.cache/
+compile_commands.json

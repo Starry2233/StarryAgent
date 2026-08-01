@@ -51,6 +51,16 @@ class Settings : public QObject
     Q_PROPERTY(bool globalScheduledTasksEnabled READ globalScheduledTasksEnabled
                    WRITE setGlobalScheduledTasksEnabled NOTIFY
                        globalScheduledTasksEnabledChanged)
+    Q_PROPERTY(bool developerSettingsUnlocked READ developerSettingsUnlocked
+                   WRITE setDeveloperSettingsUnlocked NOTIFY
+                       developerSettingsUnlockedChanged)
+    Q_PROPERTY(bool developerSettingsEnabled READ developerSettingsEnabled
+                   WRITE setDeveloperSettingsEnabled NOTIFY
+                       developerSettingsEnabledChanged)
+    Q_PROPERTY(bool developerThemeOnAndroidEnabled
+                   READ developerThemeOnAndroidEnabled
+                   WRITE setDeveloperThemeOnAndroidEnabled NOTIFY
+                       developerThemeOnAndroidEnabledChanged)
 
   public:
     explicit Settings(Config *config, QObject *parent = nullptr);
@@ -81,6 +91,18 @@ class Settings : public QObject
     {
         return m_globalScheduledTasksEnabled;
     }
+    bool developerSettingsUnlocked() const
+    {
+        return m_developerSettingsUnlocked;
+    }
+    bool developerSettingsEnabled() const
+    {
+        return m_developerSettingsEnabled;
+    }
+    bool developerThemeOnAndroidEnabled() const
+    {
+        return m_developerThemeOnAndroidEnabled;
+    }
 
     void setApiBaseUrl(const QString &v);
     void setApiKey(const QString &v);
@@ -99,6 +121,10 @@ class Settings : public QObject
     void setWebSearchExternalApiKey(const QString &v);
     void setWebSearchExternalBaseUrl(const QString &v);
     void setGlobalScheduledTasksEnabled(bool v);
+    void setDeveloperSettingsUnlocked(bool v);
+    void setDeveloperSettingsEnabled(bool v);
+    void setDeveloperThemeOnAndroidEnabled(bool v);
+    Q_INVOKABLE void resetDeveloperSettings();
 
   signals:
     void apiBaseUrlChanged();
@@ -117,6 +143,9 @@ class Settings : public QObject
     void webSearchExternalApiKeyChanged();
     void webSearchExternalBaseUrlChanged();
     void globalScheduledTasksEnabledChanged();
+    void developerSettingsUnlockedChanged();
+    void developerSettingsEnabledChanged();
+    void developerThemeOnAndroidEnabledChanged();
 
   private:
     Config *m_config;
@@ -138,6 +167,9 @@ class Settings : public QObject
     QString m_webSearchExternalApiKey;
     QString m_webSearchExternalBaseUrl{"https://api.openai.com/v1"};
     bool m_globalScheduledTasksEnabled{true};
+    bool m_developerSettingsUnlocked{false};
+    bool m_developerSettingsEnabled{false};
+    bool m_developerThemeOnAndroidEnabled{false};
 
     void persist(); // serialize current state to settings.json
 };

@@ -14,10 +14,12 @@ Item {
     id: root
 
     property bool checked: false
+    property bool enabled: true
     signal toggled(bool checked)
 
     width: 49
     height: 28
+    opacity: root.enabled ? 1 : 0.5
 
     readonly property color _trackOn: theme.dark ? "#E8E1D0" : "#1A1A1A"
     readonly property color _trackOff: theme.dark ? "#3B342C" : "#D4D4D4"
@@ -46,7 +48,7 @@ Item {
         border.width: 1
         x: root.checked ? (parent.width - width - 4) : 4
         // MIUI puff: 1.127× while pressed or hovered, else 1.0
-        scale: (ma.pressed || ma.containsMouse) ? 1.127 : 1.0
+        scale: root.enabled && (ma.pressed || ma.containsMouse) ? 1.127 : 1.0
 
         Behavior on x {
             SpringAnimation {
@@ -66,8 +68,9 @@ Item {
     MouseArea {
         id: ma
         anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
+        enabled: root.enabled
+        hoverEnabled: root.enabled
+        cursorShape: root.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
         onClicked: {
             root.checked = !root.checked
             root.toggled(root.checked)

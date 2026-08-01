@@ -653,11 +653,10 @@ Item {
                     // bind Loader.active to y/height: that cycle is what caused
                     // the repeated QML binding-loop warnings and unstable tails.
                     active: true
-                    // A chat row supplies the ListView's height. Incubating it
-                    // asynchronously can leave an estimated-height hole when the
-                    // view is moved or the delegate is recycled. Markdown's inner
-                    // blocks still use deferred creation during normal scrolling.
-                    asynchronous: false
+                    // Incubate every chat row asynchronously so rich history,
+                    // user images, and tool cards cannot monopolize the GUI frame
+                    // while the active assistant turn is receiving deltas.
+                    asynchronous: true
                     onLoaded: {
                         if (!item)
                             return
@@ -1259,17 +1258,17 @@ Item {
             readonly property string filtered: root.filterThink((rowData && rowData.text) ? rowData.text : "")
             readonly property bool thinking: (rowData && rowData.text ? rowData.text.length : 0) > 0 && filtered.length === 0
             readonly property bool hasRenderableText: filtered.length > 0
+            readonly property bool isActiveStreamingRow: root.active && root.active.streaming && rowIndex === list.count - 1
             property bool hovering: false
             function syncMarkdownView() {
                 if (!markdownLoader.item)
                     return
-                markdownLoader.item.isStreaming = root.active && root.active.streaming && rowIndex === list.count - 1
+                markdownLoader.item.isStreaming = false
                 markdownLoader.item.deferSegments = !list.initialBottomRestore
-                    && !markdownLoader.item.isStreaming
                 markdownLoader.item.rawText = filtered
             }
             width: parent.width
-            implicitHeight: (!thinking && markdownLoader.item) ? markdownLoader.item.implicitHeight + theme.sp2 : 0
+            implicitHeight: contentWrap.implicitHeight
             opacity: hasRenderableText && !thinking ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: 200 } }
             Component.onCompleted: root.vlog("assistant row index=" + rowIndex
@@ -1284,26 +1283,53 @@ Item {
             onHasRenderableTextChanged: syncMarkdownView()
             onRowDataChanged: hovering = false
 
-            Text {
-                id: avatar
+            Row {
+                id: contentWrap
                 visible: parent.hasRenderableText && !parent.thinking
-                anchors.left: parent.left
-                anchors.top: parent.top
-                text: "\u2726\uFE0E"
-                color: theme.clay
-                font.family: theme.fontDisplay
-                font.pixelSize: 16
-            }
-            Loader {
-                id: markdownLoader
-                active: parent.hasRenderableText && !parent.thinking
-                anchors.left: avatar.right
-                anchors.top: parent.top
-                anchors.leftMargin: theme.sp2
-                width: Math.max(0, parent.width - (avatar.visible ? avatar.width : 0) - theme.sp2)
-                sourceComponent: markdownViewComponent
-                onLoaded: {
-                    parent.syncMarkdownView()
+                width: parent.width
+                spacing: theme.sp2
+
+                Text {
+                    id: avatar
+                    anchors.top: parent.top
+                    text: "\u2726\uFE0E"
+                    color: theme.clay
+                    font.family: theme.fontDisplay
+                    font.pixelSize: 16
+                }
+
+                Item {
+                    width: Math.max(0, parent.width - avatar.width - parent.spacing)
+                    implicitHeight: assistantRow.isActiveStreamingRow
+                        ? streamingText.implicitHeight
+                        : (markdownLoader.item ? markdownLoader.item.implicitHeight : 0)
+
+                    TextEdit {
+                        id: streamingText
+                        visible: assistantRow.isActiveStreamingRow
+                        width: parent.width
+                        text: assistantRow.filtered
+                        readOnly: true
+                        selectByMouse: true
+                        selectByKeyboard: true
+                        activeFocusOnPress: true
+                        wrapMode: TextEdit.Wrap
+                        color: theme.ink
+                        font.family: theme.fontBody
+                        font.pixelSize: 14
+                    }
+
+                    Loader {
+                        id: markdownLoader
+                        active: parent.width > 0 && assistantRow.hasRenderableText && !assistantRow.thinking && !assistantRow.isActiveStreamingRow
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        sourceComponent: markdownViewComponent
+                        onLoaded: {
+                            assistantRow.syncMarkdownView()
+                        }
+                    }
                 }
             }
 
@@ -1322,13 +1348,34 @@ Item {
                 spacing: theme.sp1
                 z: 3
 
-                Rectangle {
+                Item {
                     width: 40
                     height: 24
-                    radius: theme.rSm
-                    color: selectionCopyMouse.containsMouse ? Qt.rgba(0, 0, 0, 0.08) : Qt.rgba(0, 0, 0, 0.04)
-                    border.color: theme.line
-                    border.width: 1
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: theme.rSm
+                        color: Qt.rgba(0.97, 0.95, 0.91, selectionCopyMouse.containsMouse ? 0.34 : 0.26)
+                        border.color: theme.line
+                        border.width: 1
+                    }
+
+                    MultiEffect {
+                        anchors.fill: parent
+                        source: Rectangle {
+                            width: 40
+                            height: 24
+                            radius: theme.rSm
+                            color: Qt.rgba(0.97, 0.95, 0.91, selectionCopyMouse.containsMouse ? 0.18 : 0.12)
+                        }
+                        autoPaddingEnabled: true
+                        blurEnabled: true
+                        blurMax: 16
+                        blur: 0.35
+                        saturation: 0
+                        z: -1
+                    }
+
                     Text {
                         anchors.centerIn: parent
                         text: "Copy"
@@ -1349,13 +1396,34 @@ Item {
                     }
                 }
 
-                Rectangle {
+                Item {
                     width: 46
                     height: 24
-                    radius: theme.rSm
-                    color: selectionOpenMouse.containsMouse ? Qt.rgba(0, 0, 0, 0.08) : Qt.rgba(0, 0, 0, 0.04)
-                    border.color: theme.line
-                    border.width: 1
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: theme.rSm
+                        color: Qt.rgba(0.97, 0.95, 0.91, selectionOpenMouse.containsMouse ? 0.34 : 0.26)
+                        border.color: theme.line
+                        border.width: 1
+                    }
+
+                    MultiEffect {
+                        anchors.fill: parent
+                        source: Rectangle {
+                            width: 46
+                            height: 24
+                            radius: theme.rSm
+                            color: Qt.rgba(0.97, 0.95, 0.91, selectionOpenMouse.containsMouse ? 0.18 : 0.12)
+                        }
+                        autoPaddingEnabled: true
+                        blurEnabled: true
+                        blurMax: 16
+                        blur: 0.35
+                        saturation: 0
+                        z: -1
+                    }
+
                     Text {
                         anchors.centerIn: parent
                         text: qsTr("Select")

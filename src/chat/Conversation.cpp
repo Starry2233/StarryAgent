@@ -34,6 +34,35 @@ bool isExecFamilyTool(const QString &toolName)
            normalized == QStringLiteral("root_exec");
 }
 
+QString normalizeProviderHint(const QString &value)
+{
+    return value.trimmed().toLower();
+}
+
+bool isDeepSeekProviderHint(const QString &baseUrl, const QString &model)
+{
+    const QString normalizedBase = normalizeProviderHint(baseUrl);
+    const QString normalizedModel = normalizeProviderHint(model);
+    return normalizedBase.contains(QStringLiteral("deepseek")) ||
+           normalizedModel.startsWith(QStringLiteral("deepseek")) ||
+           normalizedModel.contains(QStringLiteral("deepseek-"));
+}
+
+bool isAssistantRowSerializable(const Conversation::Item &row)
+{
+    if (row.kind != QStringLiteral("assistant"))
+        return false;
+    return row.complete &&
+           (!row.text.isEmpty() || !row.reasoningText.isEmpty());
+}
+
+bool isTerminalToolStatus(const QString &status)
+{
+    return status == QStringLiteral("done") ||
+           status == QStringLiteral("denied") ||
+           status == QStringLiteral("error");
+}
+
 bool isManExecAllowedInPlanMode(const QString &toolName,
                                 const QString &argsText)
 {
@@ -197,7 +226,8 @@ void Conversation::appendUser(const QString &text)
 void Conversation::appendUserWithImages(const QString &text,
                                         const QStringList &imagePaths)
 {
-    appendRow({"user", text, "", "", "", "", "", true, imagePaths});
+    appendRow({"user", text, "", "", "", "", "", "", true, true,
+               imagePaths});
     // Auto-title from the first user message.
     if (m_title == QStringLiteral("New conversation") &&
         !text.trimmed().isEmpty())
@@ -211,33 +241,86 @@ void Conversation::appendUserWithImages(const QString &text,
 
 void Conversation::appendAssistant()
 {
-    appendRow({"assistant", "", "", "", "", "", "", true});
+    appendRow({"assistant", "", "", "", "", "", "", "", true, false,
+               QStringList()});
     setStreaming(true);
     touch();
 }
 
 void Conversation::appendAssistantText(const QString &text)
 {
-    appendRow({"assistant", text, "", "", "", "", "", true});
+    appendRow({"assistant", text, "", "", "", "", "", "", true, true,
+               QStringList()});
     setStreaming(false);
     touch();
 }
 
 void Conversation::appendCompactBoundary(const QString &text)
 {
-    appendRow({"compact", text, "", "", "", "", "", false});
+    appendRow({"compact", text, "", "", "", "", "", "", false, true,
+               QStringList()});
     touch();
 }
 
 void Conversation::appendAssistantDelta(const QString &delta)
 {
     if (m_items.isEmpty() || m_items.last().kind != "assistant")
+        appendAssistant();
+    m_pendingAssistantText.append(delta);
+    scheduleAssistantDeltaFlush();
+}
+
+void Conversation::appendAssistantReasoningDelta(const QString &delta)
+{
+    if (m_items.isEmpty() || m_items.last().kind != QStringLiteral("assistant"))
+        appendAssistant();
+    m_pendingAssistantReasoningText.append(delta);
+    scheduleAssistantDeltaFlush();
+}
+
+void Conversation::scheduleAssistantDeltaFlush()
+{
+    if (m_assistantDeltaFlushScheduled)
+        return;
+    m_assistantDeltaFlushScheduled = true;
+    QTimer::singleShot(16, this, &Conversation::flushPendingAssistantDeltas);
+}
+
+void Conversation::flushPendingAssistantDeltas()
+{
+    m_assistantDeltaFlushScheduled = false;
+    if (m_pendingAssistantText.isEmpty() &&
+        m_pendingAssistantReasoningText.isEmpty())
+        return;
+    int assistantIndex = -1;
+    for (int i = int(m_items.size()) - 1; i >= 0; --i)
+    {
+        if (m_items[i].kind == QStringLiteral("assistant") &&
+            !m_items[i].complete)
+        {
+            assistantIndex = i;
+            break;
+        }
+    }
+    if (assistantIndex < 0)
     {
         appendAssistant();
+        assistantIndex = int(m_items.size()) - 1;
     }
-    Item &it = m_items.last();
-    it.text.append(delta);
-    const int i = int(m_items.size()) - 1;
+
+    Item &it = m_items[assistantIndex];
+    if (!m_pendingAssistantText.isEmpty())
+    {
+        it.text.append(m_pendingAssistantText);
+        m_pendingAssistantText.clear();
+    }
+    if (!m_pendingAssistantReasoningText.isEmpty())
+    {
+        it.reasoningText.append(m_pendingAssistantReasoningText);
+        m_pendingAssistantReasoningText.clear();
+    }
+
+    const int i = assistantIndex;
     emit dataChanged(index(i), index(i));
     touch();
 }
@@ -251,7 +334,8 @@ void Conversation::appendToolCall(const QString &toolCallId,
     // card. OpenAI guarantees unique ids per call within one turn.
     if (indexOfTool(toolCallId) >= 0)
         return;
-    appendRow({"tool", "", toolCallId, name, "", "composing", "", true});
+    appendRow({"tool", "", "", toolCallId, name, "", "composing", "", true,
+               true, QStringList()});
     touch();
 }
 
@@ -261,8 +345,8 @@ void Conversation::setToolReady(const QString &toolCallId, const QString &name,
     int i = indexOfTool(toolCallId);
     if (i < 0)
     {
-        appendRow({"tool", "", toolCallId, name, argsText, "pending", "",
-                   needsApproval});
+        appendRow({"tool", "", "", toolCallId, name, argsText, "pending", "",
+                   needsApproval, true, QStringList()});
         touch();
         return;
     }
@@ -442,8 +526,10 @@ QJsonArray Conversation::buildMessagesFromRow(int startRow) const
                 "not say it will trigger later, do not repeat the schedule, "
                 "and do not acknowledge creation success. Treat the trigger "
                 "as already happened, execute the already-triggered task "
-                "described by the system prompt, and reply only with the "
-                "concrete execution result for this run."));        out.append(scheduledAnchor);
+                "below, and reply only with the concrete execution result for "
+                "this run.\n\nUser task to execute right now:\n%1")
+                .arg(m_scheduledInstruction));
+        out.append(scheduledAnchor);
     }
     if (!m_compactSummary.trimmed().isEmpty())
     {
@@ -531,9 +617,7 @@ QJsonArray Conversation::buildMessagesFromRow(int startRow) const
             {
                 const Item &t = m_items[j];
                 const bool terminalForModel =
-                    (t.status == "done" || t.status == "denied" ||
-                     t.status == "error") &&
-                    !t.result.isEmpty();
+                    isTerminalToolStatus(t.status) && !t.result.isEmpty();
                 if (terminalForModel)
                 {
                     QJsonObject tc;
@@ -555,7 +639,7 @@ QJsonArray Conversation::buildMessagesFromRow(int startRow) const
             // for streaming deltas — and sending it as an empty-content
             // assistant message triggers 400s on stricter OpenAI-compatible
             // endpoints.
-            if (row.text.isEmpty() && toolCalls.isEmpty())
+            if (!isAssistantRowSerializable(row) && toolCalls.isEmpty())
             {
                 i = j;
                 continue;
@@ -565,6 +649,14 @@ QJsonArray Conversation::buildMessagesFromRow(int startRow) const
             m.insert("content", row.text);
             if (!toolCalls.isEmpty())
                 m.insert("tool_calls", toolCalls);
+            if (m_settings &&
+                isDeepSeekProviderHint(m_settings->apiBaseUrl(),
+                                       m_settings->model()))
+            {
+                m.insert("reasoning_content",
+                         row.reasoningText.isEmpty() ? QStringLiteral(" ")
+                                                     : row.reasoningText);
+            }
             out.append(m);
             // Emit each terminal tool result in the same order as tool_calls.
             for (int k : serializableToolRows)
@@ -584,9 +676,7 @@ QJsonArray Conversation::buildMessagesFromRow(int startRow) const
             // model-visible results are serialized; transient UI rows are
             // skipped.
             const bool terminalForModel =
-                (row.status == "done" || row.status == "denied" ||
-                 row.status == "error") &&
-                !row.result.isEmpty();
+                isTerminalToolStatus(row.status) && !row.result.isEmpty();
             if (terminalForModel)
             {
                 QJsonObject tr;
@@ -627,12 +717,14 @@ QJsonObject Conversation::toJson() const
         QJsonObject r;
         r.insert("kind", it.kind);
         r.insert("text", it.text);
+        r.insert("reasoningText", it.reasoningText);
         r.insert("toolCallId", it.toolCallId);
         r.insert("toolName", it.toolName);
         r.insert("argsText", it.argsText);
         r.insert("status", it.status);
         r.insert("result", it.result);
         r.insert("needsApproval", it.needsApproval);
+        r.insert("complete", it.complete);
         r.insert("imagePath",
                  it.imagePaths.isEmpty() ? QString() : it.imagePaths.first());
         r.insert("imagePaths", QJsonArray::fromStringList(it.imagePaths));
@@ -668,17 +760,14 @@ Conversation *Conversation::fromJson(const QJsonObject &obj, QString indexMd,
         Item it;
         it.kind = r.value("kind").toString();
         it.text = r.value("text").toString();
+        it.reasoningText = r.value("reasoningText").toString();
         it.toolCallId = r.value("toolCallId").toString();
         it.toolName = r.value("toolName").toString();
         it.argsText = r.value("argsText").toString();
-        // On reload, tool items that were composing/running are stale — mark
-        // done-ish.
         it.status = r.value("status").toString();
-        if (it.status == "composing" || it.status == "pending" ||
-            it.status == "running")
-            it.status = "done";
         it.result = r.value("result").toString();
         it.needsApproval = r.value("needsApproval").toBool(true);
+        it.complete = !r.contains("complete") || r.value("complete").toBool(true);
         if (r.contains("imagePaths") && r.value("imagePaths").isArray())
         {
             const QJsonArray paths = r.value("imagePaths").toArray();
@@ -735,6 +824,8 @@ void Conversation::ensureClient()
     m_client->setStreaming(m_settings->streaming());
     connect(m_client, &OpenAIClient::contentDelta, this,
             &Conversation::onClientDelta);
+    connect(m_client, &OpenAIClient::reasoningDelta, this,
+            &Conversation::onClientReasoningDelta);
     connect(m_client, &OpenAIClient::toolCallComposing, this,
             &Conversation::onClientComposing);
     connect(m_client, &OpenAIClient::toolCallName, this,
@@ -778,6 +869,7 @@ void Conversation::sendWithImages(const QString &text,
     m_client->setModel(m_settings->model());
     m_client->setStreaming(m_settings->streaming());
     m_compactRetryAttempted = false;
+    m_clientFinished = false;
     setError(QString());
     m_client->send(buildMessages(),
                    m_registry->openaiToolsArray(
@@ -799,6 +891,7 @@ void Conversation::runScheduledTask(const QString &taskId,
     m_client->setApiKey(m_settings->apiKey());
     m_client->setModel(m_settings->model());
     m_client->setStreaming(m_settings->streaming());
+    m_clientFinished = false;
     setError(QString());
     m_client->send(buildMessages(),
                    m_registry->openaiToolsArray(
@@ -906,6 +999,15 @@ void Conversation::onClientDelta(const QString &text)
     appendAssistantDelta(text);
 }
 
+void Conversation::onClientReasoningDelta(const QString &text)
+{
+    DebugTrace::verbose("conversation",
+                        QStringLiteral("onClientReasoningDelta id=%1 deltaLen=%2")
+                            .arg(m_id)
+                            .arg(text.size()));
+    appendAssistantReasoningDelta(text);
+}
+
 void Conversation::onClientComposing(const QString &id, const QString &name)
 {
     DebugTrace::verbose(
@@ -951,6 +1053,7 @@ void Conversation::onClientToolName(const QString &id, const QString &name)
 void Conversation::onClientReady(const QString &id, const QString &name,
                                  const QJsonObject &args)
 {
+    flushPendingAssistantDeltas();
     const QString argsStr =
         QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Indented));
     const bool scheduledExecution = !m_scheduledTaskId.isEmpty();
@@ -968,15 +1071,31 @@ void Conversation::onClientReady(const QString &id, const QString &name,
     // bypass → auto-dispatch. No approval gate.
     if (scheduledExecution || m_settings->bypassPermissions() || !needs)
         dispatch(id, name, argsStr);
+    else
+        m_clientFinished = true;
 }
 
 void Conversation::onClientFinished()
 {
+    flushPendingAssistantDeltas();
     DebugTrace::verbose(
         "conversation",
         QStringLiteral("onClientFinished id=%1 pendingResend=%2")
             .arg(m_id)
             .arg(m_pendingResend));
+    m_clientFinished = true;
+    for (int i = int(m_items.size()) - 1; i >= 0; --i)
+    {
+        if (m_items[i].kind == QStringLiteral("tool"))
+            continue;
+        if (m_items[i].kind == QStringLiteral("assistant") && !m_items[i].complete)
+        {
+            Item it = m_items[i];
+            it.complete = true;
+            updateRow(i, it);
+        }
+        break;
+    }
     setStreaming(false);
     // A tool may have finished before the stream's finished() signal arrived
     // (fast tools). If so, the resend was deferred — do it now that the client
@@ -988,6 +1107,7 @@ void Conversation::onClientFinished()
         // UI shows "replying" while the model responds to the tool result.
         setStreaming(true);
         maybeAutoCompact();
+        m_clientFinished = false;
         m_client->send(buildMessages(),
                        m_registry->openaiToolsArray(
                            schedulingToolsAvailableForCurrentTurn()));
@@ -1017,9 +1137,11 @@ void Conversation::onClientFinished()
 
 void Conversation::onClientError(const QString &msg)
 {
+    flushPendingAssistantDeltas();
     DebugTrace::verbose(
         "conversation",
         QStringLiteral("onClientError id=%1 len=%2").arg(m_id).arg(msg.size()));
+    m_clientFinished = true;
     const QString lower = msg.toLower();
     const bool contextExceeded =
         lower.contains(QStringLiteral("context_length_exceeded")) ||
@@ -1044,6 +1166,19 @@ void Conversation::onClientError(const QString &msg)
             return;
         }
         setStreaming(false);
+    }
+    for (int i = int(m_items.size()) - 1; i >= 0; --i)
+    {
+        if (m_items[i].kind == QStringLiteral("tool"))
+            continue;
+        if (m_items[i].kind == QStringLiteral("assistant") && !m_items[i].complete)
+        {
+            beginRemoveRows(QModelIndex(), i, i);
+            m_items.removeAt(i);
+            endRemoveRows();
+            touch();
+        }
+        break;
     }
     setStreaming(false);
     setError(msg);
@@ -1091,7 +1226,7 @@ void Conversation::maybeContinueAfterToolResolution(int toolIndex)
                             .arg(m_streaming));
     const bool prevStreaming = m_streaming;
     appendAssistant();
-    if (prevStreaming)
+    if (prevStreaming || !m_clientFinished)
     {
         m_pendingResend = true;
     }
@@ -1099,6 +1234,7 @@ void Conversation::maybeContinueAfterToolResolution(int toolIndex)
     {
         ensureClient();
         maybeAutoCompact();
+        m_clientFinished = false;
         m_client->send(buildMessages(),
                        m_registry->openaiToolsArray(
                            schedulingToolsAvailableForCurrentTurn()));

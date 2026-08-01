@@ -89,8 +89,10 @@ local libarchive_sources = {
 if is_plat("windows") then
     table.insert(libarchive_sources, "external/libarchive/libarchive/archive_windows.c")
     table.insert(libarchive_sources, "external/libarchive/libarchive/archive_read_disk_windows.c")
+    table.insert(libarchive_sources, "external/libarchive/libarchive/filter_fork_windows.c")
 else
     table.insert(libarchive_sources, "external/libarchive/libarchive/archive_disk_acl_linux.c")
+    table.insert(libarchive_sources, "external/libarchive/libarchive/filter_fork_posix.c")
 end
 set_languages("c++20")
 -- set_arch("x64")
@@ -116,7 +118,7 @@ end
 -- Windows keeps libcurl for desktop and uses Schannel for TLS there.
 -- Android packaging stages prebuilt OpenSSL runtime libs separately, so
 -- avoid pulling xrepo openssl3 into the Android native dependency graph.
-add_requires("nlohmann_json", "sqlite3", "zlib", "zstd", "xz", "bzip2")
+add_requires("nlohmann_json", "sqlite3", "zlib", "zstd", "bzip2")
 if not is_plat("android") then
     add_requires("libcurl")
 end
@@ -124,9 +126,10 @@ end
 target("libarchive_vendor")
     set_kind("static")
     set_languages("c99")
-    add_files(libarchive_sources)
+    add_files(libarchive_sources, {sourcekind = "cc"})
     add_headerfiles("external/libarchive/libarchive/*.h")
     add_includedirs("external/libarchive/libarchive", "external/libarchive/build/xmake", {public = true})
+    add_defines("LIBARCHIVE_STATIC", {public = true})
     if is_plat("android") then
         add_includedirs("external/libarchive/contrib/android/include")
         if android_openssl_root and #android_openssl_root > 0 then
@@ -146,7 +149,7 @@ target("libarchive_vendor")
     if is_plat("android") then
         add_cflags("-fPIC", {force = true})
     end
-    add_packages("zlib", "zstd", "xz", "bzip2", {public = true})
+    add_packages("zlib", "zstd", "bzip2", {public = true})
 
 target("starryagent")
     if is_plat("android") then
@@ -191,6 +194,7 @@ target("starryagent")
     add_files("src/ui/DesktopSelectionWindow.cpp", "src/ui/DesktopSelectionWindow.h") -- moc (Q_OBJECT)
     add_files("src/ui/FilePicker.cpp", "src/ui/FilePicker.h") -- moc (Q_OBJECT)
     add_files("src/ui/CameraBridge.cpp", "src/ui/CameraBridge.h") -- moc (Q_OBJECT)
+    add_files("src/ui/AndroidBackgroundRuntime.cpp", "src/ui/AndroidBackgroundRuntime.h") -- moc (Q_OBJECT)
     add_files("src/ui/ImageTransferService.cpp", "src/ui/ImageTransferService.h") -- moc (Q_OBJECT)
     add_files("src/ui/CodeHighlighter.cpp", "src/ui/CodeHighlighter.h") -- moc (Q_OBJECT)
     add_files("src/ui/ToastProxy.cpp", "src/ui/ToastProxy.h") -- moc (Q_OBJECT)

@@ -139,11 +139,15 @@ void ThemeManager::reload()
 bool ThemeManager::installTheme(const QString &archivePath)
 {
 #ifdef Q_OS_ANDROID
-    Q_UNUSED(archivePath);
-    setError(QStringLiteral("Theme packages are not supported on Android."));
-    emit themeInstallFailed(m_lastError);
-    return false;
-#else
+    if (!m_settings || !m_settings->developerSettingsEnabled() ||
+        !m_settings->developerThemeOnAndroidEnabled())
+    {
+        Q_UNUSED(archivePath);
+        setError(QStringLiteral("Theme packages are not supported on Android."));
+        emit themeInstallFailed(m_lastError);
+        return false;
+    }
+#endif
     if (!m_config || m_config->themesPath().isEmpty())
     {
         setError(QStringLiteral("Theme storage is not ready."));
@@ -194,7 +198,6 @@ bool ThemeManager::installTheme(const QString &archivePath)
     ThemeLoader::loadThemeFonts(currentTheme());
     emit themeInstalled(theme.id);
     return switchTheme(theme.id);
-#endif
 }
 
 bool ThemeManager::switchTheme(const QString &themeId)

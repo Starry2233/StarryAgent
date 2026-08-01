@@ -5,6 +5,11 @@
 #include <QStandardPaths>
 #include <QTextStream>
 #include <QUrl>
+#ifdef Q_OS_ANDROID
+#include <QtCore/QJniObject>
+#include <QtCore/qcoreapplication_platform.h>
+#include <QtCore/qnativeinterface.h>
+#endif
 
 namespace
 {
@@ -92,19 +97,58 @@ void Config::writeMarker(const QString &path) const
 
 QString Config::defaultRoot() const
 {
+#ifdef Q_OS_ANDROID
+    return appDataDir() + QDir::separator() + QString::fromLatin1(kStarryAgentDir);
+#else
     return appDataDir() + QDir::separator() +
            QString::fromLatin1(kStarryAgentDir);
+#endif
 }
 
 QStringList Config::presetRoots() const
 {
+#ifdef Q_OS_ANDROID
+    QString appPrivateRoot = defaultRoot();
+    QString androidDataRoot = appPrivateRoot;
+    QJniObject context = QNativeInterface::QAndroidApplication::context();
+    if (context.isValid())
+    {
+        const QJniObject filesDir =
+            context.callObjectMethod("getFilesDir", "()Ljava/io/File;");
+        if (filesDir.isValid())
+        {
+            const QJniObject filesPath =
+                filesDir.callObjectMethod("getAbsolutePath", "()Ljava/lang/String;");
+            const QString basePath = filesPath.toString();
+            if (!basePath.isEmpty())
+                appPrivateRoot = basePath + QDir::separator() + QString::fromLatin1(kStarryAgentDir);
+        }
+
+        const QJniObject extFilesDir =
+            context.callObjectMethod("getExternalFilesDir", "(Ljava/lang/String;)Ljava/io/File;",
+                                     nullptr);
+        if (extFilesDir.isValid())
+        {
+            const QJniObject extFilesPath = extFilesDir.callObjectMethod(
+                "getAbsolutePath", "()Ljava/lang/String;");
+            const QString basePath = extFilesPath.toString();
+            if (!basePath.isEmpty())
+                androidDataRoot = basePath + QDir::separator() + QString::fromLatin1(kStarryAgentDir);
+        }
+    }
+
+    const QString sharedRoot =
+        QStringLiteral("/storage/emulated/0/") + QString::fromLatin1(kStarryAgentDir);
+    return {appPrivateRoot, androidDataRoot, sharedRoot};
+#else
     const QString home = QDir::homePath();
     return {
-        defaultRoot(), // %APPDATA%/.../.starryagent
+        defaultRoot(),
         home + QDir::separator() + QString::fromLatin1(kStarryAgentDir),
         home + "/Documents/StarryAgent" + QDir::separator() +
             QString::fromLatin1(kStarryAgentDir),
     };
+#endif
 }
 
 bool Config::setRoot(const QString &path)

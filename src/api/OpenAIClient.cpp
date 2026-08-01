@@ -15,6 +15,74 @@ QStringList chunkLines(const QString &text)
     return text.split(QLatin1Char('\n'));
 }
 
+QString jsonString(const json &value)
+{
+    if (value.is_string())
+        return QString::fromStdString(value.get<std::string>());
+    if (value.is_null())
+        return {};
+    return QString::fromStdString(value.dump());
+}
+
+QString messageReasoningContent(const json &message)
+{
+    if (message.contains("reasoning_content"))
+        return jsonString(message["reasoning_content"]);
+    if (message.contains("reasoning"))
+    {
+        const json &reasoning = message["reasoning"];
+        if (reasoning.is_string())
+            return QString::fromStdString(reasoning.get<std::string>());
+        if (reasoning.is_object())
+        {
+            if (reasoning.contains("content"))
+                return jsonString(reasoning["content"]);
+            if (reasoning.contains("text"))
+                return jsonString(reasoning["text"]);
+        }
+    }
+    return {};
+}
+
+QString deltaReasoningContent(const json &delta)
+{
+    if (delta.contains("reasoning_content"))
+        return jsonString(delta["reasoning_content"]);
+    if (delta.contains("reasoning"))
+    {
+        const json &reasoning = delta["reasoning"];
+        if (reasoning.is_string())
+            return QString::fromStdString(reasoning.get<std::string>());
+        if (reasoning.is_object())
+        {
+            if (reasoning.contains("content"))
+                return jsonString(reasoning["content"]);
+            if (reasoning.contains("text"))
+                return jsonString(reasoning["text"]);
+        }
+        if (reasoning.is_array())
+        {
+            QString combined;
+            for (const auto &part : reasoning)
+            {
+                if (part.is_object())
+                {
+                    if (part.contains("text"))
+                        combined += jsonString(part["text"]);
+                    else if (part.contains("content"))
+                        combined += jsonString(part["content"]);
+                }
+                else
+                {
+                    combined += jsonString(part);
+                }
+            }
+            return combined;
+        }
+    }
+    return {};
+}
+
 void logVerboseMultiline(const char *module, const QString &header,
                         const QString &body)
 {
@@ -44,8 +112,8 @@ OpenAIClient::~OpenAIClient()
 
 void OpenAIClient::wirePipeline()
 {
-    m_sse.onData = [this](const std::string &data)
-    { m_assembler.onData(data); };
+    m_sse.onData =
+        [this](const std::string &data) { handleStreamingPayload(data); };
     m_sse.onDone = [this] { m_assembler.onStreamEnd(); };
 
     m_assembler.onContentDelta = [this](const std::string &text)
@@ -165,6 +233,68 @@ void OpenAIClient::logVerboseChunk(const std::string &chunk) const
                         QString::fromStdString(chunk));
 }
 
+void OpenAIClient::emitReasoningFromMessage(const json &message)
+{
+    const QString reasoning = messageReasoningContent(message);
+    if (!reasoning.isEmpty())
+        emit reasoningDelta(reasoning);
+    if (message.contains("content") && message["content"].is_string())
+        emit contentDelta(
+            QString::fromStdString(message["content"].get<std::string>()));
+}
+
+void OpenAIClient::parseToolCallsFromMessage(const json &message)
+{
+    if (!message.contains("tool_calls") || !message["tool_calls"].is_array())
+        return;
+    for (const auto &tc : message["tool_calls"])
+    {
+        const std::string id = tc.value("id", "");
+        const auto &fn = tc.value("function", json::object());
+        const std::string name = fn.value("name", "");
+        std::string args;
+        if (fn.contains("arguments"))
+        {
+            if (fn["arguments"].is_string())
+                args = fn["arguments"].get_ref<const std::string &>();
+            else if (fn["arguments"].is_object())
+                args = fn["arguments"].dump();
+        }
+        m_recognizer.onToolCallReady(0, id, name, args);
+    }
+}
+
+void OpenAIClient::handleStreamingPayload(const std::string &data)
+{
+    json payload;
+    try
+    {
+        payload = json::parse(data);
+    }
+    catch (...)
+    {
+        m_assembler.onData(data);
+        return;
+    }
+
+    const auto choicesIt = payload.find("choices");
+    if (choicesIt != payload.end() && choicesIt->is_array())
+    {
+        for (const auto &choice : *choicesIt)
+        {
+            const auto deltaIt = choice.find("delta");
+            if (deltaIt != choice.end() && deltaIt->is_object())
+            {
+                const QString reasoning = deltaReasoningContent(*deltaIt);
+                if (!reasoning.isEmpty())
+                    emit reasoningDelta(reasoning);
+            }
+        }
+    }
+
+    m_assembler.onData(data);
+}
+
 #ifdef Q_OS_ANDROID
 // Android: QNetworkAccessManager (system TLS, no curl dependency).
 void OpenAIClient::runRequest(const std::string &body)
@@ -208,7 +338,7 @@ void OpenAIClient::runRequest(const std::string &body)
                 }
                 const std::string chunkText(chunk.constData(), chunk.size());
                 logVerboseChunk(chunkText);
-                m_sse.feed(chunkText);
+                handleStreamingPayload(chunkText);
             });
     }
 
@@ -271,28 +401,8 @@ void OpenAIClient::runRequest(const std::string &body)
             if (choices.is_array() && !choices.empty())
             {
                 const auto &msg = choices[0].value("message", json::object());
-                if (msg.contains("content") && msg["content"].is_string())
-                    emit contentDelta(QString::fromStdString(
-                        msg["content"].get<std::string>()));
-                if (msg.contains("tool_calls") && msg["tool_calls"].is_array())
-                {
-                    for (const auto &tc : msg["tool_calls"])
-                    {
-                        const std::string id = tc.value("id", "");
-                        const auto &fn = tc.value("function", json::object());
-                        const std::string name = fn.value("name", "");
-                        std::string args;
-                        if (fn.contains("arguments"))
-                        {
-                            if (fn["arguments"].is_string())
-                                args = fn["arguments"]
-                                           .get_ref<const std::string &>();
-                            else if (fn["arguments"].is_object())
-                                args = fn["arguments"].dump();
-                        }
-                        m_recognizer.onToolCallReady(0, id, name, args);
-                    }
-                }
+                emitReasoningFromMessage(msg);
+                parseToolCallsFromMessage(msg);
             }
         }
         catch (const std::exception &e)
@@ -398,6 +508,15 @@ void OpenAIClient::runRequest(const std::string &body)
     curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
+    if (m_streaming)
+    {
+        curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
+        curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 120L);
+    }
+    else
+    {
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+    }
 
     CURLcode rc = curl_easy_perform(curl);
     curl_slist_free_all(hdrs);
@@ -411,6 +530,8 @@ void OpenAIClient::runRequest(const std::string &body)
         logVerboseResponse("error", m_rawResponse);
         if (m_cancel.load(std::memory_order_relaxed))
             emit finished();
+        else if (rc == CURLE_OPERATION_TIMEDOUT)
+            emit error(QStringLiteral("HTTP request timed out"));
         else
             emit error(QStringLiteral("curl: %1").arg(curl_easy_strerror(rc)));
         m_active = false;
@@ -441,28 +562,8 @@ void OpenAIClient::runRequest(const std::string &body)
             if (choices.is_array() && !choices.empty())
             {
                 const auto &msg = choices[0].value("message", json::object());
-                if (msg.contains("content") && msg["content"].is_string())
-                    emit contentDelta(QString::fromStdString(
-                        msg["content"].get<std::string>()));
-                if (msg.contains("tool_calls") && msg["tool_calls"].is_array())
-                {
-                    for (const auto &tc : msg["tool_calls"])
-                    {
-                        const std::string id = tc.value("id", "");
-                        const auto &fn = tc.value("function", json::object());
-                        const std::string name = fn.value("name", "");
-                        std::string args;
-                        if (fn.contains("arguments"))
-                        {
-                            if (fn["arguments"].is_string())
-                                args = fn["arguments"]
-                                           .get_ref<const std::string &>();
-                            else if (fn["arguments"].is_object())
-                                args = fn["arguments"].dump();
-                        }
-                        m_recognizer.onToolCallReady(0, id, name, args);
-                    }
-                }
+                emitReasoningFromMessage(msg);
+                parseToolCallsFromMessage(msg);
             }
         }
         catch (const std::exception &e)

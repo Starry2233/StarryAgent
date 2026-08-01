@@ -111,6 +111,15 @@ void Settings::load()
         if (j.contains("globalScheduledTasksEnabled"))
             m_globalScheduledTasksEnabled =
                 j["globalScheduledTasksEnabled"].get<bool>();
+        if (j.contains("developerSettingsUnlocked"))
+            m_developerSettingsUnlocked =
+                j["developerSettingsUnlocked"].get<bool>();
+        if (j.contains("developerSettingsEnabled"))
+            m_developerSettingsEnabled =
+                j["developerSettingsEnabled"].get<bool>();
+        if (j.contains("developerThemeOnAndroidEnabled"))
+            m_developerThemeOnAndroidEnabled =
+                j["developerThemeOnAndroidEnabled"].get<bool>();
         if (!m_models.contains(m_model))
             m_models.prepend(m_model);
         m_models = normalizedModels(m_models);
@@ -148,6 +157,9 @@ void Settings::persist()
     j["webSearchExternalApiKey"] = m_webSearchExternalApiKey.toStdString();
     j["webSearchExternalBaseUrl"] = m_webSearchExternalBaseUrl.toStdString();
     j["globalScheduledTasksEnabled"] = m_globalScheduledTasksEnabled;
+    j["developerSettingsUnlocked"] = m_developerSettingsUnlocked;
+    j["developerSettingsEnabled"] = m_developerSettingsEnabled;
+    j["developerThemeOnAndroidEnabled"] = m_developerThemeOnAndroidEnabled;
     m_config->saveSettings(QByteArray::fromStdString(j.dump(4)));
 }
 
@@ -317,4 +329,45 @@ void Settings::setGlobalScheduledTasksEnabled(bool v)
         emit globalScheduledTasksEnabledChanged();
         persist();
     }
+}
+void Settings::setDeveloperSettingsUnlocked(bool v)
+{
+    if (m_developerSettingsUnlocked != v)
+    {
+        m_developerSettingsUnlocked = v;
+        emit developerSettingsUnlockedChanged();
+        persist();
+    }
+}
+void Settings::setDeveloperSettingsEnabled(bool v)
+{
+    if (m_developerSettingsEnabled != v)
+    {
+        m_developerSettingsEnabled = v;
+        emit developerSettingsEnabledChanged();
+        persist();
+    }
+}
+void Settings::setDeveloperThemeOnAndroidEnabled(bool v)
+{
+    if (m_developerThemeOnAndroidEnabled != v)
+    {
+        m_developerThemeOnAndroidEnabled = v;
+        emit developerThemeOnAndroidEnabledChanged();
+        persist();
+    }
+}
+void Settings::resetDeveloperSettings()
+{
+    const bool enabledChanged = m_developerSettingsEnabled;
+    const bool themeChanged = m_developerThemeOnAndroidEnabled;
+    if (!enabledChanged && !themeChanged)
+        return;
+    m_developerSettingsEnabled = false;
+    m_developerThemeOnAndroidEnabled = false;
+    if (enabledChanged)
+        emit developerSettingsEnabledChanged();
+    if (themeChanged)
+        emit developerThemeOnAndroidEnabledChanged();
+    persist();
 }

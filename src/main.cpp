@@ -34,6 +34,7 @@
 #include "tools/ToolRegistry.h"
 #include "theme/ThemeManager.h"
 #include "tools/tools_smoke.h"
+#include "ui/AndroidBackgroundRuntime.h"
 #include "ui/CameraBridge.h"
 #include "ui/ClipboardProxy.h"
 #include "ui/CodeHighlighter.h"
@@ -424,6 +425,7 @@ int main(int argc, char *argv[])
 #ifndef Q_OS_ANDROID
     DesktopSelectionWindow desktopSelectionWindow;
 #endif
+    AndroidBackgroundRuntime androidBackgroundRuntime;
     CameraBridge cameraBridge;
     FilePicker filePicker;
     ImageTransferService imageTransfer;
@@ -508,6 +510,8 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("desktopSelectionWindow",
                                              &desktopSelectionWindow);
 #endif
+    engine.rootContext()->setContextProperty("androidBackgroundRuntime",
+                                             &androidBackgroundRuntime);
     engine.rootContext()->setContextProperty("cameraBridge", &cameraBridge);
     engine.rootContext()->setContextProperty("filePicker", &filePicker);
     engine.rootContext()->setContextProperty("imageTransfer", &imageTransfer);
