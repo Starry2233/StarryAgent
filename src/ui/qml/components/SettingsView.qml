@@ -950,7 +950,7 @@ Item {
                         font.family: theme.fontBody
                         font.pixelSize: 11
                         wrapMode: Text.Wrap
-                        text: qsTr("StarryAgent 0.1.0 — cross-platform AI agent.\nChanges save automatically.")
+                        text: qsTr("StarryAgent 0.3.0-alpha — cross-platform AI agent.\nChanges save automatically.")
                     }
                 }
 
