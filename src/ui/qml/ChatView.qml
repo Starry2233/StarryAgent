@@ -379,15 +379,18 @@ Item {
         }
     }
 
-    CameraCaptureWindow {
-        id: cameraWindow
-        dark: theme.dark
-        onCaptured: function(path) {
-            if (!root.active || !path || path.length === 0)
-                return
-            const imported = root.active.importImage(path)
-            if (imported && imported.length > 0)
-                root.addPendingImage(imported)
+    Loader {
+        id: cameraWindowLoader
+        active: false
+        sourceComponent: CameraCaptureWindow {
+            dark: theme.dark
+            onCaptured: function(path) {
+                if (!root.active || !path || path.length === 0)
+                    return
+                const imported = root.active.importImage(path)
+                if (imported && imported.length > 0)
+                    root.addPendingImage(imported)
+            }
         }
     }
 
@@ -1040,9 +1043,10 @@ Item {
                                     } else {
                                         if (!root.canAddMoreImages())
                                             return
-                                        cameraWindow.show()
-                                        cameraWindow.raise()
-                                        cameraWindow.requestActivate()
+                                        cameraWindowLoader.active = true
+                                        cameraWindowLoader.item.show()
+                                        cameraWindowLoader.item.raise()
+                                        cameraWindowLoader.item.requestActivate()
                                     }
                                 }
                             }
@@ -1283,6 +1287,13 @@ Item {
             onHasRenderableTextChanged: syncMarkdownView()
             onRowDataChanged: hovering = false
 
+            Timer {
+                id: hoverCloseTimer
+                interval: 120
+                repeat: false
+                onTriggered: assistantRow.hovering = false
+            }
+
             Row {
                 id: contentWrap
                 visible: parent.hasRenderableText && !parent.thinking
@@ -1337,108 +1348,88 @@ Item {
                 anchors.fill: parent
                 acceptedButtons: Qt.NoButton
                 hoverEnabled: true
-                onEntered: parent.hovering = true
-                onExited: parent.hovering = false
+                onEntered: {
+                    hoverCloseTimer.stop()
+                    parent.hovering = true
+                }
+                onExited: hoverCloseTimer.restart()
             }
 
-            Row {
-                visible: parent.hasRenderableText && !parent.thinking && (parent.hovering || selectionCopyMouse.containsMouse || selectionOpenMouse.containsMouse)
+            Loader {
                 anchors.top: parent.top
                 anchors.right: parent.right
-                spacing: theme.sp1
+                active: parent.hasRenderableText && !parent.thinking && parent.hovering
+                sourceComponent: Row {
+                    property var sourceRow: assistantRow
+                    spacing: theme.sp1
+
+                    Item {
+                        width: 40
+                        height: 24
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: theme.rSm
+                            color: Qt.rgba(0.97, 0.95, 0.91, selectionCopyMouse.containsMouse ? 0.34 : 0.26)
+                            border.color: theme.line
+                            border.width: 1
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Copy"
+                            color: theme.ink
+                            font.family: theme.fontBody
+                            font.pixelSize: 11
+                        }
+
+                        MouseArea {
+                            id: selectionCopyMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onEntered: hoverCloseTimer.stop()
+                            onExited: hoverCloseTimer.restart()
+                            onClicked: {
+                                clipboard.setText(sourceRow.filtered)
+                                if (!clipboard.showCopyFeedback())
+                                    toast.showMessage("Copied")
+                            }
+                        }
+                    }
+
+                    Item {
+                        width: 46
+                        height: 24
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: theme.rSm
+                            color: Qt.rgba(0.97, 0.95, 0.91, selectionOpenMouse.containsMouse ? 0.34 : 0.26)
+                            border.color: theme.line
+                            border.width: 1
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("Select")
+                            color: theme.ink
+                            font.family: theme.fontBody
+                            font.pixelSize: 11
+                        }
+
+                        MouseArea {
+                            id: selectionOpenMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onEntered: hoverCloseTimer.stop()
+                            onExited: hoverCloseTimer.restart()
+                            onClicked: root.openTextSelection(qsTr("助手消息"), sourceRow.filtered)
+                        }
+                    }
+                }
                 z: 3
-
-                Item {
-                    width: 40
-                    height: 24
-
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: theme.rSm
-                        color: Qt.rgba(0.97, 0.95, 0.91, selectionCopyMouse.containsMouse ? 0.34 : 0.26)
-                        border.color: theme.line
-                        border.width: 1
-                    }
-
-                    MultiEffect {
-                        anchors.fill: parent
-                        source: Rectangle {
-                            width: 40
-                            height: 24
-                            radius: theme.rSm
-                            color: Qt.rgba(0.97, 0.95, 0.91, selectionCopyMouse.containsMouse ? 0.18 : 0.12)
-                        }
-                        autoPaddingEnabled: true
-                        blurEnabled: true
-                        blurMax: 16
-                        blur: 0.35
-                        saturation: 0
-                        z: -1
-                    }
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: "Copy"
-                        color: theme.ink
-                        font.family: theme.fontBody
-                        font.pixelSize: 11
-                    }
-                    MouseArea {
-                        id: selectionCopyMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            clipboard.setText(assistantRow.filtered)
-                            if (!clipboard.showCopyFeedback())
-                                toast.showMessage("Copied")
-                        }
-                    }
-                }
-
-                Item {
-                    width: 46
-                    height: 24
-
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: theme.rSm
-                        color: Qt.rgba(0.97, 0.95, 0.91, selectionOpenMouse.containsMouse ? 0.34 : 0.26)
-                        border.color: theme.line
-                        border.width: 1
-                    }
-
-                    MultiEffect {
-                        anchors.fill: parent
-                        source: Rectangle {
-                            width: 46
-                            height: 24
-                            radius: theme.rSm
-                            color: Qt.rgba(0.97, 0.95, 0.91, selectionOpenMouse.containsMouse ? 0.18 : 0.12)
-                        }
-                        autoPaddingEnabled: true
-                        blurEnabled: true
-                        blurMax: 16
-                        blur: 0.35
-                        saturation: 0
-                        z: -1
-                    }
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: qsTr("Select")
-                        color: theme.ink
-                        font.family: theme.fontBody
-                        font.pixelSize: 11
-                    }
-                    MouseArea {
-                        id: selectionOpenMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.openTextSelection(qsTr("助手消息"), assistantRow.filtered)
-                    }
-                }
             }
         }
     }
@@ -1472,6 +1463,7 @@ Item {
             }
         }
     }
+
 
     Component {
         id: markdownViewComponent

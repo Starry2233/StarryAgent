@@ -14,6 +14,7 @@
 #include <QProcessEnvironment>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QQmlError>
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QSGRendererInterface>
@@ -55,8 +56,30 @@
 #pragma comment(lib, "dwmapi.lib")
 #endif
 
+#ifdef Q_OS_ANDROID
+#include <signal.h>
+#endif
+
 #include <cstdio>
 #include <iostream>
+
+#ifdef QT_STATIC
+#include <QtPlugin>
+Q_IMPORT_PLUGIN(QtQuick2Plugin)
+Q_IMPORT_PLUGIN(QtQuickControls2Plugin)
+Q_IMPORT_PLUGIN(QtQuickControls2BasicStylePlugin)
+Q_IMPORT_PLUGIN(QtQuickControls2BasicStyleImplPlugin)
+Q_IMPORT_PLUGIN(QtQuickControls2ImplPlugin)
+Q_IMPORT_PLUGIN(QtQuickEffectsPlugin)
+Q_IMPORT_PLUGIN(QtQuickLayoutsPlugin)
+Q_IMPORT_PLUGIN(QtQuickTemplates2Plugin)
+Q_IMPORT_PLUGIN(QtQuick_WindowPlugin)
+Q_IMPORT_PLUGIN(QMultimediaQuickModule)
+Q_IMPORT_PLUGIN(QWindowsMediaPlugin)
+Q_IMPORT_PLUGIN(QtQmlPlugin)
+Q_IMPORT_PLUGIN(QtQmlModelsPlugin)
+Q_IMPORT_PLUGIN(QtQmlWorkerScriptPlugin)
+#endif
 
 #ifdef Q_OS_WIN
 namespace
@@ -107,10 +130,58 @@ void applyThemeToTopLevelWindows(const QList<QObject *> &objects, bool dark)
 } // namespace
 #endif
 
+#ifdef Q_OS_ANDROID
+namespace
+{
+bool isRunningInImooDevice()
+{
+    // Check if persist.xtc.alxcse in getprop output
+    FILE *fp = popen("getprop", "r");
+    if (!fp)
+        return false;
+    // Read the output line by line and check for "persist.xtc.alxcse"
+    char buffer[256];
+    bool found = false;
+    while (fgets(buffer, sizeof(buffer), fp))
+    {
+        if (strstr(buffer, "persist.xtc.alxcse") != nullptr)
+        {
+            found = true;
+            break;
+        }
+    }
+    pclose(fp);
+    // Then check if /xtcdata exists
+    // If persist.xtc.alxcse is not found, check if /xtcdata exists
+    if (!found)
+    {
+        QFile xtcDataFile(QStringLiteral("/xtcdata"));
+        found = xtcDataFile.exists();
+        xtcDataFile.close();
+    }
+    return found;
+}
+}
+#endif
+
 int main(int argc, char *argv[])
 {
 #ifdef Q_OS_WIN
     attachWindowsParentConsole();
+#endif
+#ifdef Q_OS_ANDROID
+    /*
+     * Because Imoo devices monitor application data and there are risks of uploading and data, 
+     * for security reasons, if the StarryAgent detects that it is running on an Imoo device, 
+     * it will send a SIGSEGV signal to itself and crash. 
+     * Please use devices other than Imoo for armeabi-v7a architecture.
+    */
+    if (isRunningInImooDevice())
+    {
+        // Then send SIGSEGV signal to self
+        raise(SIGSEGV);
+        return 1;
+    }
 #endif
     QStringList rawArgs;
     int maxRenderPageSize = 420;
@@ -523,7 +594,6 @@ int main(int argc, char *argv[])
                                              DebugTrace::verboseEnabled());
     engine.rootContext()->setContextProperty("maxRenderPageSize",
                                              maxRenderPageSize);
-    DebugTrace::verbose("qml", QStringLiteral("loading qrc:/ui/qml/main.qml"));
     engine.load(QUrl(QStringLiteral("qrc:/ui/qml/main.qml")));
     if (engine.rootObjects().isEmpty())
         return -1;
