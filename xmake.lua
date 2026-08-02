@@ -7,6 +7,40 @@ local android_openssl_root = os.getenv("STARRY_ANDROID_OPENSSL_ROOT") or
                               os.getenv("ANDROID_OPENSSL_ROOT") or
                               os.getenv("OPENSSL_ANDROID_ROOT")
 
+local function find_qt_deploy_tool(target)
+    local qt = target:data("qt")
+    if not qt or not qt.bindir then
+        return nil
+    end
+    if target:is_plat("windows") or target:is_plat("mingw") then
+        local tool = path.join(qt.bindir, is_host("windows") and "windeployqt.exe" or "windeployqt")
+        if os.isfile(tool) then
+            return tool
+        end
+    elseif target:is_plat("macosx") then
+        local tool = path.join(qt.bindir, "macdeployqt")
+        if os.isfile(tool) then
+            return tool
+        end
+    end
+    return nil
+end
+
+local function deploy_qt_runtime(target)
+    if target:is_plat("android") or has_config("static") then
+        return
+    end
+
+    local deploy_tool = find_qt_deploy_tool(target)
+    if not deploy_tool then
+        return
+    end
+
+    -- This xmake hook context does not reliably expose the process-launch APIs
+    -- needed to invoke deploy tools, so keep the runtime-tool probe but skip
+    -- execution here instead of failing the whole build.
+end
+
 local libarchive_sources = {
     "external/libarchive/libarchive/archive_acl.c",
     "external/libarchive/libarchive/archive_blake2sp_ref.c",
@@ -86,7 +120,7 @@ local libarchive_sources = {
     "external/libarchive/libarchive/archive_version_details.c",
     "external/libarchive/libarchive/archive_virtual.c",
 }
-if is_plat("windows") then
+if is_plat("windows", "mingw") then
     table.insert(libarchive_sources, "external/libarchive/libarchive/archive_windows.c")
     table.insert(libarchive_sources, "external/libarchive/libarchive/archive_read_disk_windows.c")
     table.insert(libarchive_sources, "external/libarchive/libarchive/filter_fork_windows.c")
@@ -100,6 +134,12 @@ set_languages("c++20")
 -- compiler toolchain when no compatible ccache executable is found.
 set_policy("build.ccache", true)
 
+option("static")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable desktop static Qt/runtime linking")
+option_end()
+
 add_rules("mode.debug", "mode.release")
 
 -- Windows defaults to clang-cl (MSVC ABI).
@@ -107,8 +147,9 @@ add_rules("mode.debug", "mode.release")
 -- Other non-Windows targets default to LLVM/Clang unless the user passes a
 -- toolchain explicitly.
 if not get_config("toolchain") then
-    if is_plat("windows") then
+    if is_plat("windows", "mingw") then
         set_toolchains("clang-cl")
+	set_toolchains("mingw")
     elseif not is_plat("android") then
         set_toolchains("llvm")
     end
@@ -118,7 +159,17 @@ end
 -- Windows keeps libcurl for desktop and uses Schannel for TLS there.
 -- Android packaging stages prebuilt OpenSSL runtime libs separately, so
 -- avoid pulling xrepo openssl3 into the Android native dependency graph.
-add_requires("nlohmann_json", "sqlite3", "zlib", "zstd", "bzip2")
+-- On Windows + MinGW the default CMake-based recipe for zstd picks cl.exe
+-- (MSVC) and produces a .lib MinGW cannot link (undefined __security_cookie /
+-- __GSHandlerCheck). Force its native xmake port so the same MinGW toolchain
+-- is used end-to-end.
+local mingw_host = (is_plat("windows") or is_plat("mingw")) and get_config("toolchain") == "mingw"
+if mingw_host then
+    add_requires("zstd", {configs = {cmake = false}})
+else
+    add_requires("zstd")
+end
+add_requires("nlohmann_json", "sqlite3", "zlib", "bzip2")
 if not is_plat("android") then
     add_requires("libcurl")
 end
@@ -139,7 +190,7 @@ target("libarchive_vendor")
         end
     end
     add_defines("PLATFORM_CONFIG_H=\"config.h\"", "LIBARCHIVE_STATIC", "__LIBARCHIVE_BUILD")
-    if is_plat("windows") then
+    if is_plat("windows", "mingw") then
         add_defines("_CRT_SECURE_NO_WARNINGS", "_WIN32_WINNT=0x0601")
     elseif is_plat("android") then
         add_defines("_GNU_SOURCE")
@@ -153,6 +204,9 @@ target("libarchive_vendor")
 
 target("starryagent")
     if is_plat("android") then
+        if is_arch("armeabi-v7a") then 
+            print("Warning: Imoo is the bitch so the StarryAgent cannot run properly on Imoo devices. If the StarryAgent detects Imoo, it will SEGSEGV and crash. Please use armeabi-v7a devices other than Imoo.")
+        end
         add_rules("qt.shared")
         set_kind("shared")
         add_cxflags("-fPIC", {force = true})
@@ -162,7 +216,76 @@ target("starryagent")
             target:add("shflags", "-Wl,--disable-new-dtags", "-Wl,--rpath=''", {force = true})
         end)
     else
-        add_rules("qt.quickapp")
+        if has_config("static") then
+            if is_plat("mingw") and not is_plat("windows") then
+                -- qt.quickapp_static's config_static helper only handles
+                -- is_plat("windows"), which is false under `-p mingw`. Mimic
+                -- its windows branch here so the windows platform plugin is
+                -- actually imported/linked on a MinGW static build.
+                add_rules("qt.quickapp")
+                add_values("qt.plugins", "QWindowsIntegrationPlugin")
+                add_values("qt.linkdirs", "plugins/platforms")
+                add_values("qt.links", "qwindows")
+                add_linkdirs(path.join(get_config("qt"), "qml", "QtQuick"),
+                             path.join(get_config("qt"), "qml", "QtQuick", "Controls"),
+                             path.join(get_config("qt"), "qml", "QtQuick", "Controls", "Basic"),
+                             path.join(get_config("qt"), "qml", "QtQuick", "Controls", "Basic", "impl"),
+                             path.join(get_config("qt"), "qml", "QtQuick", "Controls", "impl"),
+                             path.join(get_config("qt"), "qml", "QtQuick", "Effects"),
+                             path.join(get_config("qt"), "qml", "QtQuick", "Layouts"),
+                             path.join(get_config("qt"), "qml", "QtQuick", "Templates"),
+                             path.join(get_config("qt"), "qml", "QtQuick", "Window"),
+                             path.join(get_config("qt"), "qml", "QtMultimedia"),
+                             path.join(get_config("qt"), "plugins", "multimedia"),
+                             path.join(get_config("qt"), "qml", "QtQml"),
+                             path.join(get_config("qt"), "qml", "QtQml", "Models"),
+                             path.join(get_config("qt"), "qml", "QtQml", "WorkerScript"))
+                add_links("qtquick2plugin", "qtquickcontrols2plugin",
+                          "qtquickcontrols2basicstyleplugin", "qtquickcontrols2basicstyleimplplugin",
+                          "qtquickcontrols2implplugin", "effectsplugin", "qquicklayoutsplugin",
+                          "qtquicktemplates2plugin", "quickwindowplugin", "quickmultimediaplugin",
+                          "windowsmediaplugin", "qmlplugin", "modelsplugin", "workerscriptplugin",
+                          "Qt6QuickControls2Basic", "Qt6QuickControls2BasicStyleImpl",
+                          "Qt6QuickControls2Impl", "Qt6QuickEffects", "Qt6QuickLayouts",
+                          "Qt6QuickTemplates2", "Qt6MultimediaQuick",
+                          "strmiids", "amstrmid", "dmoguids", "uuid", "msdmo", "ole32",
+                          "oleaut32", "mf", "mfuuid", "mfplat", "mfcore", "propsys",
+                          "mfreadwrite", "evr", "dxva2", "wmcodecdspuuid")
+                add_files(path.join(get_config("qt"), "qml", "QtQuick", "objects-Release", "qtquick2plugin_init", "qtquick2plugin_init.cpp.obj"),
+                          path.join(get_config("qt"), "qml", "QtQuick", "Controls", "objects-Release", "qtquickcontrols2plugin_init", "qtquickcontrols2plugin_init.cpp.obj"),
+                          path.join(get_config("qt"), "qml", "QtQuick", "Controls", "Basic", "objects-Release", "qtquickcontrols2basicstyleplugin_init", "qtquickcontrols2basicstyleplugin_init.cpp.obj"),
+                          path.join(get_config("qt"), "qml", "QtQuick", "Controls", "Basic", "impl", "objects-Release", "qtquickcontrols2basicstyleimplplugin_init", "qtquickcontrols2basicstyleimplplugin_init.cpp.obj"),
+                          path.join(get_config("qt"), "qml", "QtQuick", "Controls", "impl", "objects-Release", "qtquickcontrols2implplugin_init", "qtquickcontrols2implplugin_init.cpp.obj"),
+                          path.join(get_config("qt"), "qml", "QtQuick", "Effects", "objects-Release", "effectsplugin_init", "effectsplugin_init.cpp.obj"),
+                          path.join(get_config("qt"), "qml", "QtQuick", "Layouts", "objects-Release", "qquicklayoutsplugin_init", "qquicklayoutsplugin_init.cpp.obj"),
+                          path.join(get_config("qt"), "qml", "QtQuick", "Templates", "objects-Release", "qtquicktemplates2plugin_init", "qtquicktemplates2plugin_init.cpp.obj"),
+                          path.join(get_config("qt"), "qml", "QtQuick", "Window", "objects-Release", "quickwindow_init", "quickwindow_init.cpp.obj"),
+                          path.join(get_config("qt"), "qml", "QtMultimedia", "objects-Release", "quickmultimedia_init", "quickmultimedia_init.cpp.obj"),
+                          path.join(get_config("qt"), "plugins", "multimedia", "objects-Release", "QWindowsMediaPlugin_init", "QWindowsMediaPlugin_init.cpp.obj"),
+                          path.join(get_config("qt"), "qml", "QtQuick", "objects-Release", "Quick_resources_1", ".qt", "rcc", "qrc_qmake_QtQuick_init.cpp.obj"),
+                          path.join(get_config("qt"), "qml", "QtQuick", "Controls", "objects-Release", "QuickControls2_resources_1", ".qt", "rcc", "qrc_qmake_QtQuick_Controls_init.cpp.obj"),
+                          path.join(get_config("qt"), "qml", "QtQuick", "Controls", "Basic", "objects-Release", "QuickControls2Basic_resources_1", ".qt", "rcc", "qrc_qmake_QtQuick_Controls_Basic_init.cpp.obj"),
+                          path.join(get_config("qt"), "qml", "QtQuick", "Controls", "Basic", "objects-Release", "QuickControls2Basic_resources_2", ".qt", "rcc", "qrc_QuickControls2Basic_raw_qml_0_init.cpp.obj"),
+                          path.join(get_config("qt"), "lib", "objects-Release", "QuickControls2Basic_resources_3", ".qt", "rcc", "qrc_qtquickcontrols2basicstyle_init.cpp.obj"),
+                          path.join(get_config("qt"), "qml", "QtQuick", "Controls", "Basic", "impl", "objects-Release", "QuickControls2BasicStyleImpl_resources_1", ".qt", "rcc", "qrc_qmake_QtQuick_Controls_Basic_impl_init.cpp.obj"),
+                          path.join(get_config("qt"), "qml", "QtQuick", "Controls", "impl", "objects-Release", "QuickControls2Impl_resources_1", ".qt", "rcc", "qrc_qmake_QtQuick_Controls_impl_init.cpp.obj"),
+                          path.join(get_config("qt"), "qml", "QtQuick", "Effects", "objects-Release", "QuickEffectsPrivate_resources_1", ".qt", "rcc", "qrc_qmake_QtQuick_Effects_init.cpp.obj"),
+                          path.join(get_config("qt"), "qml", "QtQuick", "Layouts", "objects-Release", "QuickLayouts_resources_1", ".qt", "rcc", "qrc_qmake_QtQuick_Layouts_init.cpp.obj"),
+                          path.join(get_config("qt"), "qml", "QtQuick", "Templates", "objects-Release", "QuickTemplates2_resources_1", ".qt", "rcc", "qrc_qmake_QtQuick_Templates_init.cpp.obj"))
+            else
+                add_rules("qt.quickapp_static")
+            end
+            add_defines("QT_STATIC")
+            if is_plat("windows", "mingw") then
+                add_ldflags("-static-libgcc", "-static-libstdc++", {force = true})
+                add_shflags("-static-libgcc", "-static-libstdc++", {force = true})
+            else
+                add_ldflags("-static", {force = true})
+                add_shflags("-static", {force = true})
+            end
+        else
+            add_rules("qt.quickapp")
+        end
         set_kind("binary")
     end
     add_files("src/main.cpp")
@@ -236,13 +359,48 @@ target("starryagent")
     if not is_plat("android") then
         add_frameworks("QtWidgets")
     end
+    if is_plat("windows", "mingw") then
+        add_syslinks("dwmapi")
+    end
     add_packages("nlohmann_json", "sqlite3")
     if not is_plat("android") then
         add_packages("libcurl")
     end
     add_deps("libarchive_vendor")
 
+    -- Qt 6 static SDKs ship prebuilt resource/plugin init object files that
+    -- xmake's qt rules surface via .prl files as `-l<path>.obj`, which GNU ld
+    -- rejects. Redirect them into objectfiles so they are linked directly.
+    if is_plat("windows", "mingw") and has_config("static") then
+        on_config(function (target)
+            local qt = target:data("qt")
+            if not qt or not qt.sdkdir then
+                return
+            end
+            local sdkdir = qt.sdkdir
+            local cleaned = {}
+            for _, link in ipairs(target:get("syslinks") or {}) do
+                local name = tostring(link)
+                local objpath
+                if name:endswith(".obj") and (name:find("/", 1, true) or name:find("\\", 1, true)) then
+                    objpath = name
+                elseif name:find("objects%-Release") then
+                    objpath = path.join(sdkdir, name .. ".obj")
+                end
+                if objpath then
+                    if os.isfile(objpath) then
+                        table.insert(target:objectfiles(), objpath)
+                    end
+                else
+                    table.insert(cleaned, link)
+                end
+            end
+            target:set("syslinks", cleaned)
+        end)
+    end
+
     after_build(function (target)
+        deploy_qt_runtime(target)
         local data_src = path.join(os.projectdir(), "external", "syntax-highlighting", "data")
         if os.isdir(data_src) then
             local data_dst = path.join(target:targetdir(), "syntax-highlighting-data")

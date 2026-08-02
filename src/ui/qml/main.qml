@@ -96,27 +96,30 @@ ApplicationWindow {
             anchors.bottom: parent.bottom
             anchors.leftMargin: shell.isNarrow ? 0 : 280
 
-            ChatView {
-                id: chat
+            Loader {
                 anchors.fill: parent
-                visible: shell.destination === "chat"
-                isDemo: demoMode
-            }
-
-            ModePicker {
-                id: picker
-                anchors.fill: parent
-                visible: shell.destination === "picker"
-                onPicked: (modeId) => {
-                    conversations.newConversation(modeId)
-                    shell._navOverride = null   // active now set → binding drives "chat"
+                active: shell.destination === "chat"
+                sourceComponent: ChatView {
+                    isDemo: demoMode
                 }
             }
 
-            SettingsView {
-                id: settingsPanel
+            Loader {
                 anchors.fill: parent
-                visible: shell.destination === "settings"
+                active: shell.destination === "picker"
+                sourceComponent: ModePicker {
+                    onPicked: (modeId) => {
+                        conversations.newConversation(modeId)
+                        shell._navOverride = null   // active now set -> binding drives "chat"
+                    }
+                }
+            }
+
+            Loader {
+                anchors.fill: parent
+                active: shell.destination === "settings"
+                sourceComponent: SettingsView {
+                }
             }
         }
 
@@ -194,22 +197,26 @@ ApplicationWindow {
         // --- Sidebar ---
         // Wide: inline at x=0, z=0 (content offset by 280px).
         // Narrow: overlay drawer, slides from -width to 0.
-        Sidebar {
-            id: sidebar
+        Loader {
             width: 280
             height: parent.height
             x: shell.isNarrow ? (shell.drawerOpen ? 0 : -width) : 0
             y: 0
             z: shell.isNarrow ? 200 : 0
-            settingsActive: shell.destination === "settings"
-            onRequestNewConversation: shell._navOverride = "picker"
-            onRequestSettings: shell._navOverride = "settings"
-            onRequestOpenConversation: {
-                shell._navOverride = null
-                if (shell.isNarrow)
-                    shell.drawerOpen = false
+            active: true
+            sourceComponent: Sidebar {
+                width: 280
+                height: shell.height
+                settingsActive: shell.destination === "settings"
+                onRequestNewConversation: shell._navOverride = "picker"
+                onRequestSettings: shell._navOverride = "settings"
+                onRequestOpenConversation: {
+                    shell._navOverride = null
+                    if (shell.isNarrow)
+                        shell.drawerOpen = false
+                }
+                onRequestClose: shell.drawerOpen = false
             }
-            onRequestClose: shell.drawerOpen = false
             Behavior on x {
                 NumberAnimation { duration: 250; easing.type: Easing.OutCubic }
                 enabled: shell.isNarrow
