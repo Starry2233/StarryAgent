@@ -407,6 +407,10 @@ Item {
             if (message && message.length > 0)
                 toast.showMessage(message)
         }
+        function onPermissionRequestLaunched(message) {
+            if (message && message.length > 0)
+                toast.showMessage(message)
+        }
     }
 
     Connections {
@@ -453,7 +457,7 @@ Item {
         anchors.top: parent.top
         anchors.bottom: inputBar.top
         anchors.horizontalCenter: parent.horizontalCenter
-        width: Math.min(parent.width, 868)
+        width: Math.min(parent.width - theme.sp5 * 2, 868)
         anchors.topMargin: theme.sp4
         anchors.bottomMargin: theme.sp4
 
@@ -659,14 +663,13 @@ Item {
                     // Incubate every chat row asynchronously so rich history,
                     // user images, and tool cards cannot monopolize the GUI frame
                     // while the active assistant turn is receiving deltas.
-                    asynchronous: true
+                    asynchronous: !(list.initialBottomRestore || list.waitingForInitialRows)
                     onLoaded: {
                         if (!item)
                             return
                         rowDelegate.syncLoadedItem()
-                        root.vlog("row activate index=" + rowDelegate.rowIndex
-                                  + " kind=" + rowDelegate.rowData.kind
-                                  + " est=" + rowDelegate.estimatedHeight)
+                        if (list.initialBottomRestore)
+                            list.queueInitialBottomSettle(list.initialRestoreRevision)
                     }
                     sourceComponent: {
                         if (rowDelegate.rowData.kind === "user")

@@ -1,6 +1,8 @@
 #include "FilePicker.h"
 
 #ifdef Q_OS_ANDROID
+#include <QPointer>
+
 #include <QtCore/QDir>
 #include <QtCore/QFile>
 #include <QtCore/QJniEnvironment>
@@ -137,15 +139,16 @@ QStringList FilePicker::pickImages()
             .object<jstring>(),
         jboolean(true));
 
+    QPointer<FilePicker> guard(this);
     QtAndroidPrivate::startActivity(
         intent, kImagePickerRequestCode,
-        [this, context](int requestCode, int resultCode, const QJniObject &data)
+        [guard, context](int requestCode, int resultCode, const QJniObject &data)
         {
-            if (requestCode != kImagePickerRequestCode)
+            if (!guard || requestCode != kImagePickerRequestCode)
                 return;
             if (resultCode != -1 || !data.isValid())
             {
-                emit errorOccurred(QStringLiteral("Image selection cancelled"));
+                emit guard->errorOccurred(QStringLiteral("Image selection cancelled"));
                 return;
             }
 
@@ -153,7 +156,7 @@ QStringList FilePicker::pickImages()
                 "getContentResolver", "()Landroid/content/ContentResolver;");
             if (!resolver.isValid())
             {
-                emit errorOccurred(
+                emit guard->errorOccurred(
                     QStringLiteral("Content resolver unavailable"));
                 return;
             }
@@ -196,10 +199,10 @@ QStringList FilePicker::pickImages()
 
             if (imported.isEmpty())
             {
-                emit errorOccurred(QStringLiteral("No images were selected"));
+                emit guard->errorOccurred(QStringLiteral("No images were selected"));
                 return;
             }
-            emit imagesPicked(imported);
+            emit guard->imagesPicked(imported);
         });
 
     return {};
@@ -233,15 +236,16 @@ QString FilePicker::pickThemePackage()
         "setType", "(Ljava/lang/String;)Landroid/content/Intent;",
         QJniObject::fromString(QStringLiteral("*/*")).object<jstring>());
 
+    QPointer<FilePicker> guard(this);
     QtAndroidPrivate::startActivity(
         intent, kThemePickerRequestCode,
-        [this, context](int requestCode, int resultCode, const QJniObject &data)
+        [guard, context](int requestCode, int resultCode, const QJniObject &data)
         {
-            if (requestCode != kThemePickerRequestCode)
+            if (!guard || requestCode != kThemePickerRequestCode)
                 return;
             if (resultCode != -1 || !data.isValid())
             {
-                emit errorOccurred(
+                emit guard->errorOccurred(
                     QStringLiteral("Theme package selection cancelled"));
                 return;
             }
@@ -249,7 +253,7 @@ QString FilePicker::pickThemePackage()
                 "getContentResolver", "()Landroid/content/ContentResolver;");
             if (!resolver.isValid())
             {
-                emit errorOccurred(
+                emit guard->errorOccurred(
                     QStringLiteral("Content resolver unavailable"));
                 return;
             }
@@ -257,18 +261,18 @@ QString FilePicker::pickThemePackage()
                 data.callObjectMethod("getData", "()Landroid/net/Uri;");
             if (!uri.isValid())
             {
-                emit errorOccurred(QStringLiteral("No theme package selected"));
+                emit guard->errorOccurred(QStringLiteral("No theme package selected"));
                 return;
             }
             const QString localPath =
                 copyContentUriToTempFile(resolver, uri, QStringLiteral("tar.zst"));
             if (localPath.isEmpty())
             {
-                emit errorOccurred(
+                emit guard->errorOccurred(
                     QStringLiteral("Failed to import theme package"));
                 return;
             }
-            emit themePackagePicked(localPath);
+            emit guard->themePackagePicked(localPath);
         });
 
     return {};

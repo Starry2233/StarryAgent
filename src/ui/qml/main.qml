@@ -13,6 +13,33 @@ ApplicationWindow {
     color: theme.hasWallpaper ? "transparent" : theme.paper
     title: qsTr("StarryAgent")
 
+    function handleAndroidBack() {
+        if (Qt.platform.os !== "android")
+            return false
+        if (config.firstLaunch)
+            return true
+        if (shell.drawerOpen) {
+            shell.drawerOpen = false
+            return true
+        }
+        if (shell.destination === "settings") {
+            shell._navOverride = null
+            return true
+        }
+        if (shell.destination === "picker" && conversations.active) {
+            shell._navOverride = null
+            return true
+        }
+        androidBackgroundRuntime.moveTaskToBack()
+        return true
+    }
+
+    Shortcut {
+        sequences: [StandardKey.Back]
+        context: Qt.ApplicationShortcut
+        onActivated: win.handleAndroidBack()
+    }
+
     Theme { id: theme; dark: settings.theme === "dark" }
     Image {
         anchors.fill: parent

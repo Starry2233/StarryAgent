@@ -115,7 +115,7 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: config.setRoot(modelData)
+                        onClicked: androidPermissionBridge.ensureRootAccessAndSetRoot(modelData)
                     }
                 }
             }

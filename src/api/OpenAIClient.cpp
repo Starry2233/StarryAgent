@@ -338,7 +338,7 @@ void OpenAIClient::runRequest(const std::string &body)
                 }
                 const std::string chunkText(chunk.constData(), chunk.size());
                 logVerboseChunk(chunkText);
-                handleStreamingPayload(chunkText);
+                m_sse.feed(chunkText);
             });
     }
 

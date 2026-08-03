@@ -37,6 +37,7 @@
 #include "theme/ThemeManager.h"
 #include "tools/tools_smoke.h"
 #include "ui/AndroidBackgroundRuntime.h"
+#include "ui/AndroidPermissionBridge.h"
 #include "ui/CameraBridge.h"
 #include "ui/ClipboardProxy.h"
 #include "ui/CodeHighlighter.h"
@@ -501,6 +502,7 @@ int main(int argc, char *argv[])
 #endif
     AndroidBackgroundRuntime androidBackgroundRuntime;
     CameraBridge cameraBridge;
+    AndroidPermissionBridge androidPermissionBridge(&config);
     FilePicker filePicker;
     ImageTransferService imageTransfer;
     CodeHighlighter codeHighlighter;
@@ -588,6 +590,8 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("androidBackgroundRuntime",
                                              &androidBackgroundRuntime);
     engine.rootContext()->setContextProperty("cameraBridge", &cameraBridge);
+    engine.rootContext()->setContextProperty("androidPermissionBridge",
+                                             &androidPermissionBridge);
     engine.rootContext()->setContextProperty("filePicker", &filePicker);
     engine.rootContext()->setContextProperty("imageTransfer", &imageTransfer);
     engine.rootContext()->setContextProperty("codeHighlighter",

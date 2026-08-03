@@ -45,13 +45,22 @@ local function compile_translations(target, batchcmds)
     local lrelease = os.getenv("LRELEASE")
     if not lrelease or #lrelease == 0 then
         local qt = target:data("qt")
-        if not qt or not qt.bindir then
-            raise("Qt lrelease was not found; set LRELEASE to the lrelease executable")
+        local qtHost = get_config("qt_host")
+        local bindir = nil
+        if qtHost and #qtHost > 0 then
+            bindir = path.join(path.absolute(qtHost), "bin")
+        elseif qt and qt.bindir then
+            bindir = qt.bindir
         end
-        lrelease = path.join(qt.bindir, is_host("windows") and "lrelease.exe" or "lrelease")
+        if not bindir then
+            print("error: Qt lrelease was not found; set LRELEASE or --qt_host to a Qt host tools installation")
+            return
+        end
+        lrelease = path.join(bindir, is_host("windows") and "lrelease.exe" or "lrelease")
     end
     if not os.isfile(lrelease) then
-        raise("Qt lrelease was not found: %s", lrelease)
+        print(string.format("error: Qt lrelease was not found: %s", lrelease))
+        return
     end
     lrelease = path.absolute(lrelease)
 
@@ -64,7 +73,8 @@ local function compile_translations(target, batchcmds)
         local ts = path.join(os.projectdir(), "translations", name .. ".ts")
         local qm = path.join(os.projectdir(), "translations", name .. ".qm")
         if not os.isfile(ts) then
-            raise("Translation source was not found: %s", ts)
+            print(string.format("error: Translation source was not found: %s", ts))
+            return
         end
         if not os.isfile(qm) or os.mtime(ts) > os.mtime(qm) then
             batchcmds:vrunv(lrelease, {ts, "-qm", qm})
@@ -349,6 +359,7 @@ target("starryagent")
     add_files("src/ui/FilePicker.cpp", "src/ui/FilePicker.h") -- moc (Q_OBJECT)
     add_files("src/ui/CameraBridge.cpp", "src/ui/CameraBridge.h") -- moc (Q_OBJECT)
     add_files("src/ui/AndroidBackgroundRuntime.cpp", "src/ui/AndroidBackgroundRuntime.h") -- moc (Q_OBJECT)
+    add_files("src/ui/AndroidPermissionBridge.cpp", "src/ui/AndroidPermissionBridge.h") -- moc (Q_OBJECT)
     add_files("src/ui/ImageTransferService.cpp", "src/ui/ImageTransferService.h") -- moc (Q_OBJECT)
     add_files("src/ui/CodeHighlighter.cpp", "src/ui/CodeHighlighter.h") -- moc (Q_OBJECT)
     add_files("src/ui/ToastProxy.cpp", "src/ui/ToastProxy.h") -- moc (Q_OBJECT)
