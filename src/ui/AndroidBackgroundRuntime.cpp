@@ -1,6 +1,8 @@
 #include "AndroidBackgroundRuntime.h"
 
 #ifdef Q_OS_ANDROID
+#include <QPointer>
+
 #include <QtCore/QJniObject>
 #include <QtCore/private/qandroidextras_p.h>
 #include <QtCore/qcoreapplication_platform.h>
@@ -113,13 +115,14 @@ bool AndroidBackgroundRuntime::requestIgnoreBatteryOptimizations()
                                 uri.object());
     }
 
+    QPointer<AndroidBackgroundRuntime> guard(this);
     QtAndroidPrivate::startActivity(
         intent, kIgnoreBatteryOptimizationsRequestCode,
-        [this](int requestCode, int, const QJniObject &)
+        [guard](int requestCode, int, const QJniObject &)
         {
-            if (requestCode != kIgnoreBatteryOptimizationsRequestCode)
+            if (!guard || requestCode != kIgnoreBatteryOptimizationsRequestCode)
                 return;
-            refreshBatteryOptimizationState();
+            guard->refreshBatteryOptimizationState();
         });
     emit requestLaunched(QStringLiteral(
         "Opened Android battery optimization request. Allow unrestricted background running if prompted."));
@@ -158,13 +161,14 @@ bool AndroidBackgroundRuntime::openBackgroundSettings()
                                 uri.object());
     }
 
+    QPointer<AndroidBackgroundRuntime> guard(this);
     QtAndroidPrivate::startActivity(
         intent, kBackgroundSettingsRequestCode,
-        [this](int requestCode, int, const QJniObject &)
+        [guard](int requestCode, int, const QJniObject &)
         {
-            if (requestCode != kBackgroundSettingsRequestCode)
+            if (!guard || requestCode != kBackgroundSettingsRequestCode)
                 return;
-            refreshBatteryOptimizationState();
+            guard->refreshBatteryOptimizationState();
         });
     emit requestLaunched(QStringLiteral(
         "Opened StarryAgent app settings. Check battery, startup, and background permissions there if needed."));
