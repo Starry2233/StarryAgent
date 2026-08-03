@@ -21,7 +21,7 @@ Item {
 
             Text {
                 width: parent.width
-                text: qsTr("任务会在应用后台保持运行，完成后会通知你，并把工具调用和回复留在对应会话中。")
+                text: qsTr("Scheduled tasks keep running in the background. When they finish, you will be notified and the tool calls and replies stay in the related conversation.")
                 color: theme.inkSoft
                 font.family: theme.fontBody
                 font.pixelSize: 12
@@ -31,7 +31,7 @@ Item {
             Text {
                 visible: Qt.platform.os === "android"
                 width: parent.width
-                text: qsTr("Android 设备还需要允许后台运行、电池优化例外，部分厂商还会额外限制自启动。去 设置 > 常规 > Background Runtime 里申请标准权限；如果仍然无效，请参照 Don’t Kill My App。")
+                text: qsTr("On Android, background runtime and battery optimization exceptions are also required, and some vendors add extra autostart limits. Open Settings > General > Background Runtime to grant the standard permissions. If it still does not work, refer to Don’t Kill My App.")
                 color: theme.inkSoft
                 font.family: theme.fontBody
                 font.pixelSize: 12
@@ -39,14 +39,14 @@ Item {
             }
 
             ToggleRow {
-                title: qsTr("全局定时任务")
-                description: qsTr("开关关闭时，所有定时任务暂停；开启后按计划继续运行。")
+                title: qsTr("Global Scheduled Tasks")
+                description: qsTr("When this switch is off, all scheduled tasks pause. When it is on, they continue on schedule.")
                 checked: scheduledTasks.globalEnabled
                 onToggled: scheduledTasks.globalEnabled = checked
             }
 
             Text {
-                text: qsTr("任务")
+                text: qsTr("Tasks")
                 color: theme.inkSoft
                 font.family: theme.fontBody
                 font.pixelSize: 10
@@ -87,7 +87,7 @@ Item {
 
                             Text {
                                 width: parent.width - taskSwitch.width - parent.spacing
-                                text: conversationTitle.length > 0 ? conversationTitle : qsTr("已删除的会话")
+                                text: conversationTitle.length > 0 ? conversationTitle : qsTr("Deleted Conversation")
                                 color: theme.ink
                                 font.family: theme.fontBody
                                 font.pixelSize: 13
@@ -118,15 +118,15 @@ Item {
                             spacing: theme.sp2
                             Text {
                                 width: parent.width - deleteButton.width - parent.spacing
-                                text: (scope === "global" ? qsTr("全局") : qsTr("此会话")) + "  |  "
-                                      + qsTr("下次 %1").arg(nextRun.replace("T", " "))
+                                text: (scope === "global" ? qsTr("Global") : qsTr("This Conversation")) + "  |  "
+                                      + qsTr("Next %1").arg(nextRun.replace("T", " "))
                                       + "  |  "
-                                      + (temp ? qsTr("临时单次")
-                                                : recurrence === "daily" ? qsTr("每天")
-                                                : recurrence === "weekly" ? qsTr("每周")
-                                                : recurrence === "monthly" ? qsTr("每月")
-                                                : recurrence === "interval" ? qsTr("每 %1 分钟").arg(intervalMinutes)
-                                                : qsTr("单次"))
+                                      + (temp ? qsTr("One-Time Temporary")
+                                                : recurrence === "daily" ? qsTr("Daily")
+                                                : recurrence === "weekly" ? qsTr("Weekly")
+                                                : recurrence === "monthly" ? qsTr("Monthly")
+                                                : recurrence === "interval" ? qsTr("Every %1 Minutes").arg(intervalMinutes)
+                                                : qsTr("One-Time"))
                                 color: theme.inkSoft
                                 font.family: theme.fontMono
                                 font.pixelSize: 10
@@ -151,7 +151,7 @@ Item {
                 width: parent.width
                 topPadding: theme.sp5
                 horizontalAlignment: Text.AlignHCenter
-                text: qsTr("还没有定时任务")
+                text: qsTr("No scheduled tasks yet")
                 color: theme.inkSoft
                 font.family: theme.fontBody
                 font.pixelSize: 13

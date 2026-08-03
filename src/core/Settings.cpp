@@ -35,6 +35,16 @@ QString normalizedWebSearchImplementation(const QString &input)
         return mode;
     return QStringLiteral("bing_legacy");
 }
+
+QString normalizedLanguage(const QString &input)
+{
+    const QString language = input.trimmed();
+    if (language == QStringLiteral("zh_CN") ||
+        language == QStringLiteral("zh_TW") ||
+        language == QStringLiteral("en_US"))
+        return language;
+    return QStringLiteral("zh_CN");
+}
 } // namespace
 
 Settings::Settings(Config *config, QObject *parent)
@@ -82,6 +92,9 @@ void Settings::load()
             m_closeToTray = j["closeToTray"].get<bool>();
         if (j.contains("theme"))
             m_theme = QString::fromStdString(j["theme"].get<std::string>());
+        if (j.contains("language"))
+            m_language = normalizedLanguage(
+                QString::fromStdString(j["language"].get<std::string>()));
         if (j.contains("currentThemeId"))
             m_currentThemeId =
                 QString::fromStdString(j["currentThemeId"].get<std::string>())
@@ -151,6 +164,7 @@ void Settings::persist()
     j["startOnLogin"] = m_startOnLogin;
     j["closeToTray"] = m_closeToTray;
     j["theme"] = m_theme.toStdString();
+    j["language"] = m_language.toStdString();
     j["currentThemeId"] = m_currentThemeId.toStdString();
     j["webSearchImplementation"] = m_webSearchImplementation.toStdString();
     j["webSearchModel"] = m_webSearchModel.toStdString();
@@ -272,6 +286,16 @@ void Settings::setTheme(const QString &v)
     {
         m_theme = v;
         emit themeChanged();
+        persist();
+    }
+}
+void Settings::setLanguage(const QString &v)
+{
+    const QString language = normalizedLanguage(v);
+    if (m_language != language)
+    {
+        m_language = language;
+        emit languageChanged();
         persist();
     }
 }

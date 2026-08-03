@@ -881,7 +881,7 @@ Item {
 
                         Text {
                             width: parent.width
-                            text: qsTr("已选择 %1/5 张图片").arg(root.pendingImagePaths.length)
+                            text: qsTr("Selected %1/5 images").arg(root.pendingImagePaths.length)
                             color: theme.ink
                             font.family: theme.fontBody
                             font.pixelSize: 12
@@ -1020,7 +1020,7 @@ Item {
                         ThemedMenu {
                             id: attachMenu
                             minMenuWidth: 164
-                            items: [qsTr("图片"), qsTr("拍照")]
+                            items: [qsTr("Image"), qsTr("Camera")]
                             onTriggered: function(index) {
                                 if (index === 0) {
                                     if (!root.active)
@@ -1425,7 +1425,7 @@ Item {
                             cursorShape: Qt.PointingHandCursor
                             onEntered: hoverCloseTimer.stop()
                             onExited: hoverCloseTimer.restart()
-                            onClicked: root.openTextSelection(qsTr("助手消息"), sourceRow.filtered)
+                            onClicked: root.openTextSelection(qsTr("Assistant Message"), sourceRow.filtered)
                         }
                     }
                 }
@@ -1472,7 +1472,7 @@ Item {
                 root.openImagePreview(source, alt)
             }
             onSelectionRequested: function(text) {
-                root.openTextSelection(qsTr("助手消息"), text)
+                root.openTextSelection(qsTr("Assistant Message"), text)
             }
         }
     }

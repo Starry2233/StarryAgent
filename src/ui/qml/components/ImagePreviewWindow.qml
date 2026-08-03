@@ -10,7 +10,7 @@ Window {
     minimumHeight: 320
     visible: false
     color: "black"
-    title: imageName && imageName.length > 0 ? imageName : qsTr("图片预览")
+    title: imageName && imageName.length > 0 ? imageName : qsTr("Image Preview")
 
     property string imageSource: ""
     property string imageName: ""

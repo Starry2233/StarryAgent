@@ -11,11 +11,11 @@ Window {
     modality: Qt.ApplicationModal
     flags: Qt.Dialog
     color: theme.paper
-    title: qsTr("确认")
+    title: qsTr("Confirm")
 
     property string message: ""
-    property string confirmLabel: qsTr("删除")
-    property string cancelLabel: qsTr("取消")
+    property string confirmLabel: qsTr("Delete")
+    property string cancelLabel: qsTr("Cancel")
     signal confirmed()
     signal cancelled()
 
