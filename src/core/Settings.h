@@ -35,6 +35,7 @@ class Settings : public QObject
     Q_PROPERTY(bool closeToTray READ closeToTray WRITE setCloseToTray NOTIFY
                    closeToTrayChanged)
     Q_PROPERTY(QString theme READ theme WRITE setTheme NOTIFY themeChanged)
+    Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)
     Q_PROPERTY(QString currentThemeId READ currentThemeId WRITE
                    setCurrentThemeId NOTIFY currentThemeIdChanged)
     Q_PROPERTY(QString webSearchImplementation READ webSearchImplementation
@@ -79,6 +80,7 @@ class Settings : public QObject
     bool startOnLogin() const { return m_startOnLogin; }
     bool closeToTray() const { return m_closeToTray; }
     QString theme() const { return m_theme; }
+    QString language() const { return m_language; }
     QString currentThemeId() const { return m_currentThemeId; }
     QString webSearchImplementation() const { return m_webSearchImplementation; }
     QString webSearchModel() const { return m_webSearchModel; }
@@ -115,6 +117,7 @@ class Settings : public QObject
     void setStartOnLogin(bool v);
     void setCloseToTray(bool v);
     void setTheme(const QString &v);
+    void setLanguage(const QString &v);
     void setCurrentThemeId(const QString &v);
     void setWebSearchImplementation(const QString &v);
     void setWebSearchModel(const QString &v);
@@ -137,6 +140,7 @@ class Settings : public QObject
     void startOnLoginChanged();
     void closeToTrayChanged();
     void themeChanged();
+    void languageChanged();
     void currentThemeIdChanged();
     void webSearchImplementationChanged();
     void webSearchModelChanged();
@@ -161,6 +165,7 @@ class Settings : public QObject
     bool m_startOnLogin{false};
     bool m_closeToTray{true};
     QString m_theme{"light"};
+    QString m_language{"zh_CN"};
     QString m_currentThemeId{"warm-clay"};
     QString m_webSearchImplementation{"bing_legacy"};
     QString m_webSearchModel{"gpt-4o-mini"};

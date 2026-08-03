@@ -29,6 +29,7 @@ ui_*.h
 *.qmlc
 *.jsc
 *.rcc
+translations/*.qm
 
 # Compiler and debugger artifacts
 *.obj

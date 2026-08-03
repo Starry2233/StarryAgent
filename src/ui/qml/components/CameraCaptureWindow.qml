@@ -15,7 +15,7 @@ Window {
     minimumWidth: 720
     minimumHeight: 520
     visible: false
-    title: qsTr("拍照")
+    title: qsTr("Camera")
     color: dark ? "#161311" : "#F7F1E7"
 
     Camera {
@@ -70,7 +70,7 @@ Window {
                 Text {
                     anchors.centerIn: parent
                     visible: !camera.active
-                    text: qsTr("未检测到可用摄像头")
+                    text: qsTr("No camera detected")
                     color: dark ? "#E8E1D0" : "#1C1916"
                     font.pixelSize: 18
                 }
@@ -81,14 +81,14 @@ Window {
                 spacing: 12
 
                 Button {
-                    text: qsTr("取消")
+                    text: qsTr("Cancel")
                     onClicked: root.hide()
                 }
 
                 Item { Layout.fillWidth: true }
 
                 Button {
-                    text: qsTr("拍照")
+                    text: qsTr("Capture")
                     enabled: camera.active
                     onClicked: imageCapture.captureToFile()
                 }

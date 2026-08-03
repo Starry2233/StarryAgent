@@ -30,6 +30,7 @@
 #include "core/Config.h"
 #include "core/AutoStartManager.h"
 #include "core/DebugTrace.h"
+#include "core/LanguageManager.h"
 #include "core/ProcessMemoryLimiter.h"
 #include "core/Settings.h"
 #include "tools/ToolRegistry.h"
@@ -410,6 +411,8 @@ int main(int argc, char *argv[])
     Settings settings(&config);
     if (!config.firstLaunch())
         settings.load();
+    LanguageManager languageManager(&settings);
+    languageManager.initialize();
     ThemeManager themeManager(&config, &settings);
     DebugTrace::verbose("config", QStringLiteral("rootDir=%1 firstLaunch=%2")
                                       .arg(config.rootDir())
@@ -571,6 +574,7 @@ int main(int argc, char *argv[])
     MarkdownParser markdownParser;
     engine.rootContext()->setContextProperty("config", &config);
     engine.rootContext()->setContextProperty("settings", &settings);
+    engine.rootContext()->setContextProperty("languageManager", &languageManager);
     engine.rootContext()->setContextProperty("themeManager", &themeManager);
     engine.rootContext()->setContextProperty("toolRegistry", &toolRegistry);
     engine.rootContext()->setContextProperty("conversations", &conversations);
@@ -594,6 +598,7 @@ int main(int argc, char *argv[])
                                              DebugTrace::verboseEnabled());
     engine.rootContext()->setContextProperty("maxRenderPageSize",
                                              maxRenderPageSize);
+    languageManager.bindEngine(&engine);
     engine.load(QUrl(QStringLiteral("qrc:/ui/qml/main.qml")));
     if (engine.rootObjects().isEmpty())
         return -1;

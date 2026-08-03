@@ -11,7 +11,7 @@ Window {
     minimumHeight: 360
     visible: false
     color: theme.paper
-    title: selectionTitle && selectionTitle.length > 0 ? selectionTitle : qsTr("文本选择")
+    title: selectionTitle && selectionTitle.length > 0 ? selectionTitle : qsTr("Text Selection")
 
     property string selectionTitle: ""
     property string selectionText: ""

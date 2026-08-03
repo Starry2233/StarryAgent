@@ -29,7 +29,7 @@ Item {
     ThemedMenu {
         id: ctxMenu
         minMenuWidth: 168
-        items: [qsTr("重命名"), qsTr("删除"), qsTr("属性")]
+        items: [qsTr("Rename"), qsTr("Delete"), qsTr("Properties")]
         onTriggered: function(index) {
             if (!root.targetConv)
                 return
@@ -89,13 +89,13 @@ Item {
             anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 20
             spacing: 12
             Button {
-                text: qsTr("取消")
+                text: qsTr("Cancel")
                 contentItem: Text { text: parent.text; color: theme.ink; font.family: theme.fontBody; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 background: Rectangle { color: parent.down ? Qt.rgba(0,0,0,0.06) : "transparent"; border.color: theme.line; border.width: 1; radius: theme.rPill; implicitWidth: 64; implicitHeight: 32 }
                 onClicked: mConfirm.visible2 = false
             }
             Button {
-                text: qsTr("删除")
+                text: qsTr("Delete")
                 contentItem: Text { text: parent.text; color: "white"; font.family: theme.fontBody; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 background: Rectangle { color: parent.down ? theme.clayDeep : theme.clay; radius: theme.rPill; implicitWidth: 64; implicitHeight: 32 }
                 onClicked: {
@@ -122,14 +122,14 @@ Item {
             anchors.left: parent.left; anchors.right: parent.right
             anchors.top: parent.top
             anchors.margins: 20; spacing: 10
-            Text { text: qsTr("对话属性"); color: theme.ink; font.family: theme.fontDisplay; font.pixelSize: 15; font.weight: Font.Medium }
+            Text { text: qsTr("Conversation Properties"); color: theme.ink; font.family: theme.fontDisplay; font.pixelSize: 15; font.weight: Font.Medium }
             Repeater {
                 model: [
-                    { label: qsTr("标题"), value: root.targetConv ? root.targetConv.title : "" },
-                    { label: qsTr("模式"), value: root.targetConv ? root.targetConv.modeId : "" },
+                    { label: qsTr("Title"), value: root.targetConv ? root.targetConv.title : "" },
+                    { label: qsTr("Mode"), value: root.targetConv ? root.targetConv.modeId : "" },
                     { label: qsTr("ID"),   value: root.targetConv ? root.targetConv.id : "" },
-                    { label: qsTr("创建"), value: root.targetConv ? Qt.formatDateTime(root.targetConv.created, "yyyy-MM-dd HH:mm") : "" },
-                    { label: qsTr("更新"), value: root.targetConv ? Qt.formatDateTime(root.targetConv.updated, "yyyy-MM-dd HH:mm") : "" }
+                    { label: qsTr("Created"), value: root.targetConv ? Qt.formatDateTime(root.targetConv.created, "yyyy-MM-dd HH:mm") : "" },
+                    { label: qsTr("Updated"), value: root.targetConv ? Qt.formatDateTime(root.targetConv.updated, "yyyy-MM-dd HH:mm") : "" }
                 ]
                 delegate: Column {
                     width: parent.width; spacing: 1
@@ -138,7 +138,7 @@ Item {
                 }
             }
             Button {
-                text: qsTr("关闭"); anchors.right: parent.right
+                text: qsTr("Close"); anchors.right: parent.right
                 contentItem: Text { text: parent.text; color: "white"; font.family: theme.fontBody; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 background: Rectangle { color: parent.down ? theme.clayDeep : theme.clay; radius: theme.rPill; implicitWidth: 64; implicitHeight: 32 }
                 onClicked: mProps.visible2 = false
@@ -149,7 +149,7 @@ Item {
     // Route delete/properties to the platform-appropriate surface.
     function requestDelete(conv) {
         root.targetConv = conv
-        const msg = qsTr("删除对话「%1」？此操作不可撤销。").arg(conv ? conv.title : "")
+        const msg = qsTr("Delete conversation \"%1\"? This action cannot be undone.").arg(conv ? conv.title : "")
         if (root.isMobile) { mConfirmMsg.text = msg; mConfirm.visible2 = true }
         else deleteDlg.open(msg)
     }
@@ -198,24 +198,24 @@ Item {
         const now = new Date()
         const u = new Date(updated)
         if (u.getFullYear() === now.getFullYear() && u.getMonth() === now.getMonth() && u.getDate() === now.getDate())
-            return qsTr("今天")
+            return qsTr("Today")
         const yesterday = new Date(now)
         yesterday.setDate(now.getDate() - 1)
         if (u.getFullYear() === yesterday.getFullYear() && u.getMonth() === yesterday.getMonth() && u.getDate() === yesterday.getDate())
-            return qsTr("昨天")
+            return qsTr("Yesterday")
         const days = Math.floor((now - u) / 86400000)
-        if (days <= 7) return qsTr("7天内")
-        return qsTr("更早")
+        if (days <= 7) return qsTr("Within 7 Days")
+        return qsTr("Earlier")
     }
 
     function relTime(updated) {
         const u = new Date(updated)
         const now = new Date()
         const mins = Math.floor((now - u) / 60000)
-        if (mins < 1) return qsTr("刚刚")
-        if (mins < 60) return qsTr("%1分钟前").arg(mins)
+        if (mins < 1) return qsTr("Just now")
+        if (mins < 60) return qsTr("%1 minutes ago").arg(mins)
         const hrs = Math.floor(mins / 60)
-        if (hrs < 24) return qsTr("%1小时前").arg(hrs)
+        if (hrs < 24) return qsTr("%1 hours ago").arg(hrs)
         const d = u
         return Qt.formatDateTime(d, "MM-dd HH:mm")
     }
@@ -308,7 +308,7 @@ Item {
                 border.width: 1
                 Text {
                     anchors.centerIn: parent
-                    text: "+  " + qsTr("新对话")
+                    text: "+  " + qsTr("New Conversation")
                     color: theme.clayDeep
                     font.family: theme.fontBody
                     font.pixelSize: 13
@@ -508,7 +508,7 @@ Item {
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     leftPadding: theme.sp3 + 24
-                    text: qsTr("设置")
+                    text: qsTr("Settings")
                     color: root.settingsActive ? theme.clayDeep : theme.ink
                     font.family: theme.fontBody
                     font.pixelSize: 13

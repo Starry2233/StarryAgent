@@ -41,6 +41,37 @@ local function deploy_qt_runtime(target)
     -- execution here instead of failing the whole build.
 end
 
+local function compile_translations(target, batchcmds)
+    local lrelease = os.getenv("LRELEASE")
+    if not lrelease or #lrelease == 0 then
+        local qt = target:data("qt")
+        if not qt or not qt.bindir then
+            raise("Qt lrelease was not found; set LRELEASE to the lrelease executable")
+        end
+        lrelease = path.join(qt.bindir, is_host("windows") and "lrelease.exe" or "lrelease")
+    end
+    if not os.isfile(lrelease) then
+        raise("Qt lrelease was not found: %s", lrelease)
+    end
+    lrelease = path.absolute(lrelease)
+
+    local translations = {
+        "starryagent_zh_CN",
+        "starryagent_zh_TW",
+        "starryagent_en_US",
+    }
+    for _, name in ipairs(translations) do
+        local ts = path.join(os.projectdir(), "translations", name .. ".ts")
+        local qm = path.join(os.projectdir(), "translations", name .. ".qm")
+        if not os.isfile(ts) then
+            raise("Translation source was not found: %s", ts)
+        end
+        if not os.isfile(qm) or os.mtime(ts) > os.mtime(qm) then
+            batchcmds:vrunv(lrelease, {ts, "-qm", qm})
+        end
+    end
+end
+
 local libarchive_sources = {
     "external/libarchive/libarchive/archive_acl.c",
     "external/libarchive/libarchive/archive_blake2sp_ref.c",
@@ -289,8 +320,8 @@ target("starryagent")
         set_kind("binary")
     end
     add_files("src/main.cpp")
-    add_files("src/core/Config.cpp", "src/core/Settings.cpp", "src/core/ProcessMemoryLimiter.cpp", "src/core/DebugTrace.cpp", "src/core/AutoStartManager.cpp")
-    add_files("src/core/Config.h", "src/core/Settings.h", "src/core/ProcessMemoryLimiter.h", "src/core/DebugTrace.h", "src/core/AutoStartManager.h")   -- moc (Q_OBJECT)
+    add_files("src/core/Config.cpp", "src/core/Settings.cpp", "src/core/LanguageManager.cpp", "src/core/ProcessMemoryLimiter.cpp", "src/core/DebugTrace.cpp", "src/core/AutoStartManager.cpp")
+    add_files("src/core/Config.h", "src/core/Settings.h", "src/core/LanguageManager.h", "src/core/ProcessMemoryLimiter.h", "src/core/DebugTrace.h", "src/core/AutoStartManager.h")   -- moc (Q_OBJECT)
     add_files("src/theme/ThemeMetadata.cpp", "src/theme/ThemeManager.cpp", "src/theme/ThemeLoader.cpp")
     add_files("src/theme/ThemeManager.h") -- moc (Q_OBJECT)
     add_files("src/api/SseParser.cpp", "src/api/StreamAssembler.cpp",
@@ -349,6 +380,7 @@ target("starryagent")
               "external/syntax-highlighting/src/lib/worddelimiters.cpp")
     add_files("external/syntax-highlighting/data/themes/theme-data.qrc")
     add_files("src/qml.qrc")
+    add_files("src/i18n.qrc")
     -- fonts.qrc omitted on Android (NDK clang OOM on large generated C++).
     -- Fonts are compiled as binary .rcc via on_load rule below.
     if not is_plat("android") then
@@ -398,6 +430,10 @@ target("starryagent")
             target:set("syslinks", cleaned)
         end)
     end
+
+    before_buildcmd_files(function (target, batchcmds)
+        compile_translations(target, batchcmds)
+    end)
 
     after_build(function (target)
         deploy_qt_runtime(target)
