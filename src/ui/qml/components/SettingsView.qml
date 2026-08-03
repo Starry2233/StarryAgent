@@ -21,6 +21,7 @@ Item {
     property bool developerSettingsDraftEnabled: settings.developerSettingsEnabled
     property bool developerThemeOnAndroidDraftEnabled: settings.developerThemeOnAndroidEnabled
     property string androidBackgroundStatusMessage: ""
+    property string rootSwitchStatusMessage: ""
     readonly property bool developerSettingsDirty:
         developerSettingsDraftEnabled !== settings.developerSettingsEnabled ||
         developerThemeOnAndroidDraftEnabled !== settings.developerThemeOnAndroidEnabled
@@ -1062,6 +1063,15 @@ Item {
                 wrapMode: Text.Wrap
                 text: qsTr("Switching to a different root directory reloads the settings stored there.")
             }
+            Text {
+                visible: root.rootSwitchStatusMessage.length > 0
+                width: parent.width
+                color: theme.clay
+                font.family: theme.fontBody
+                font.pixelSize: 12
+                wrapMode: Text.Wrap
+                text: root.rootSwitchStatusMessage
+            }
             // preset roots — same set as the first-launch DirPromptView
             Row {
                 width: parent.width
@@ -1098,10 +1108,7 @@ Item {
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                if (config.setRoot(modelData))
-                                    settings.load()
-                            }
+                            onClicked: androidPermissionBridge.ensureRootAccessAndSetRoot(modelData)
                         }
                     }
                 }
@@ -1252,6 +1259,22 @@ Item {
                 font.capitalization: Font.AllUppercase
             }
 
+            Connections {
+                target: androidPermissionBridge
+                function onRootApplied(path) {
+                    root.rootSwitchStatusMessage = qsTr("Switched root directory.")
+                    settings.load()
+                    toast.showMessage(root.rootSwitchStatusMessage)
+                }
+                function onErrorOccurred(message) {
+                    root.rootSwitchStatusMessage = message
+                    toast.showMessage(message)
+                }
+                function onPermissionRequestLaunched(message) {
+                    root.rootSwitchStatusMessage = message
+                    toast.showMessage(message)
+                }
+            }
             Connections {
                 target: filePicker
                 function onThemePackagePicked(path) {

@@ -407,6 +407,10 @@ Item {
             if (message && message.length > 0)
                 toast.showMessage(message)
         }
+        function onPermissionRequestLaunched(message) {
+            if (message && message.length > 0)
+                toast.showMessage(message)
+        }
     }
 
     Connections {

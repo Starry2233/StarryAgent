@@ -1,6 +1,9 @@
 #include "CameraBridge.h"
 
+CameraBridge::CameraBridge(QObject *parent) : QObject(parent) {}
+
 #ifdef Q_OS_ANDROID
+#include <QFuture>
 #include <QtCore/QDir>
 #include <QtCore/QFile>
 #include <QtCore/QJniObject>
@@ -136,11 +139,36 @@ class CameraActivityResultReceiver final : public QAndroidActivityResultReceiver
 } // namespace
 #endif
 
+#ifdef Q_OS_ANDROID
+bool CameraBridge::ensureCameraPermission()
+{
+    const auto status = QtAndroidPrivate::checkPermission(
+        QStringLiteral("android.permission.CAMERA"));
+    if (status.result() == QtAndroidPrivate::PermissionResult::Authorized)
+        return true;
+
+    const auto result = QtAndroidPrivate::requestPermission(
+        QStringLiteral("android.permission.CAMERA"));
+    if (result.result() == QtAndroidPrivate::PermissionResult::Authorized)
+    {
+        emit permissionRequestLaunched(QStringLiteral(
+            "Granted Android camera permission."));
+        return true;
+    }
+
+    emit errorOccurred(QStringLiteral(
+        "Camera permission was denied. Allow camera access and try again."));
+    return false;
+}
+#endif
+
 bool CameraBridge::launchSystemCamera()
 {
 #ifdef Q_OS_ANDROID
     QJniObject context = QNativeInterface::QAndroidApplication::context();
     if (!context.isValid())
+        return false;
+    if (!ensureCameraPermission())
         return false;
 
     QJniObject action = QJniObject::fromString(
