@@ -179,6 +179,18 @@ bool AndroidBackgroundRuntime::openBackgroundSettings()
 #endif
 }
 
+bool AndroidBackgroundRuntime::moveTaskToBack()
+{
+#ifdef Q_OS_ANDROID
+    QJniObject activity = QNativeInterface::QAndroidApplication::context();
+    if (!activity.isValid())
+        return false;
+    return activity.callMethod<jboolean>("moveTaskToBack", "(Z)Z", jboolean(true));
+#else
+    return false;
+#endif
+}
+
 bool AndroidBackgroundRuntime::setBatteryOptimizationIgnored(bool ignored)
 {
     if (m_batteryOptimizationIgnored == ignored)

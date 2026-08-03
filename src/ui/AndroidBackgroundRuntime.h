@@ -16,6 +16,7 @@ class AndroidBackgroundRuntime : public QObject
     Q_INVOKABLE void refreshBatteryOptimizationState();
     Q_INVOKABLE bool requestIgnoreBatteryOptimizations();
     Q_INVOKABLE bool openBackgroundSettings();
+    Q_INVOKABLE bool moveTaskToBack();
 
   signals:
     void batteryOptimizationIgnoredChanged();
