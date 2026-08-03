@@ -25,6 +25,9 @@ Item {
     readonly property bool developerSettingsDirty:
         developerSettingsDraftEnabled !== settings.developerSettingsEnabled ||
         developerThemeOnAndroidDraftEnabled !== settings.developerThemeOnAndroidEnabled
+    readonly property bool narrowLayout: width < 600
+    readonly property int headerLeadingInset: narrowLayout ? theme.sp6 + theme.sp5 : theme.sp4
+    readonly property int headerTitleTopMargin: narrowLayout ? theme.sp5 : theme.sp2
 
     function resetDeveloperDraftsToSaved() {
         developerSettingsDraftEnabled = settings.developerSettingsEnabled
@@ -73,9 +76,9 @@ Item {
         }
         Text {
             anchors.top: parent.top
-            anchors.topMargin: theme.sp2
+            anchors.topMargin: root.headerTitleTopMargin
             anchors.left: parent.left
-            anchors.leftMargin: theme.sp4
+            anchors.leftMargin: root.headerLeadingInset
             text: qsTr("Settings")
             color: theme.ink
             font.family: theme.fontDisplay
@@ -85,7 +88,7 @@ Item {
         Row {
             anchors.left: parent.left
             anchors.bottom: parent.bottom
-            anchors.leftMargin: theme.sp4
+            anchors.leftMargin: root.headerLeadingInset
             spacing: theme.sp4
             Repeater {
                 model: [qsTr("General"), qsTr("Themes"), qsTr("Scheduled Tasks")]
