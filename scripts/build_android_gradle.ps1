@@ -702,7 +702,7 @@ function Invoke-GradlePackage {
 
     Push-Location $StageRoot
     try {
-        & $GradleWrapper $GradleTask "--no-daemon" "--stacktrace"
+        & $GradleWrapper $GradleTask "--no-daemon" "--stacktrace" 2>&1 | ForEach-Object { Write-Host $_ }
         if ($LASTEXITCODE -ne 0) {
             throw "Gradle failed: $GradleTask"
         }

@@ -1369,8 +1369,11 @@ Item {
                     required property string previewPath
                     required property bool builtIn
 
+                    readonly property bool compactCard: width < 440
+
                     width: themeCol.width
-                    height: Math.max(92, cardContent.implicitHeight + theme.sp4)
+                    height: compactCard ? Math.max(140, compactContent.implicitHeight + theme.sp4)
+                                        : Math.max(92, wideContent.implicitHeight + theme.sp4)
                     radius: theme.rMd
                     color: themeManager.currentThemeId === themeId
                            ? (theme.accent(theme.dark ? 0.10 : 0.08))
@@ -1379,7 +1382,8 @@ Item {
                     border.color: themeManager.currentThemeId === themeId ? theme.clay : theme.line
 
                     Row {
-                        id: cardContent
+                        id: wideContent
+                        visible: !compactCard
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
@@ -1402,7 +1406,7 @@ Item {
                         }
 
                         Column {
-                            width: parent.width - 88 - actions.width - theme.sp3 * 2
+                            width: Math.max(120, parent.width - 88 - wideActions.width - theme.sp3 * 2)
                             spacing: theme.sp1
                             Text {
                                 width: parent.width
@@ -1434,7 +1438,7 @@ Item {
                         }
 
                         Row {
-                            id: actions
+                            id: wideActions
                             width: 168
                             spacing: theme.sp2
                             ThemeButton {
@@ -1446,6 +1450,87 @@ Item {
                             }
                             ThemeButton {
                                 width: 76
+                                text: qsTr("Remove")
+                                enabled: !builtIn
+                                danger: true
+                                onClicked: themeManager.uninstallTheme(themeId)
+                            }
+                        }
+                    }
+
+                    Column {
+                        id: compactContent
+                        visible: compactCard
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.margins: theme.sp3
+                        spacing: theme.sp3
+
+                        Row {
+                            width: parent.width
+                            spacing: theme.sp3
+
+                            Rectangle {
+                                width: 88
+                                height: 56
+                                radius: theme.rSm
+                                color: theme.surfaceAlt
+                                clip: true
+                                Image {
+                                    anchors.fill: parent
+                                    source: previewPath
+                                    visible: previewPath.length > 0
+                                    fillMode: Image.PreserveAspectCrop
+                                    asynchronous: true
+                                }
+                            }
+
+                            Column {
+                                width: parent.width - 88 - theme.sp3
+                                spacing: theme.sp1
+                                Text {
+                                    width: parent.width
+                                    text: name + (version.length > 0 ? ("  " + version) : "")
+                                    color: theme.ink
+                                    font.family: theme.fontBody
+                                    font.pixelSize: 14
+                                    font.weight: Font.Medium
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    width: parent.width
+                                    text: author
+                                    color: theme.inkSoft
+                                    font.family: theme.fontMono
+                                    font.pixelSize: 10
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    width: parent.width
+                                    text: description
+                                    color: theme.inkSoft
+                                    font.family: theme.fontBody
+                                    font.pixelSize: 12
+                                    maximumLineCount: 2
+                                    wrapMode: Text.Wrap
+                                    elide: Text.ElideRight
+                                }
+                            }
+                        }
+
+                        Row {
+                            width: parent.width
+                            spacing: theme.sp2
+                            ThemeButton {
+                                width: (parent.width - parent.spacing) / 2
+                                text: themeManager.currentThemeId === themeId ? qsTr("Active") : qsTr("Use")
+                                enabled: themeManager.currentThemeId !== themeId
+                                variant: themeManager.currentThemeId === themeId ? "secondary" : "primary"
+                                onClicked: themeManager.switchTheme(themeId)
+                            }
+                            ThemeButton {
+                                width: (parent.width - parent.spacing) / 2
                                 text: qsTr("Remove")
                                 enabled: !builtIn
                                 danger: true
