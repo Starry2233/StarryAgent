@@ -6,7 +6,6 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QStandardPaths>
-#include <QTextStream>
 
 #include "ScheduledTaskManager.h"
 #include "core/Config.h"
@@ -16,66 +15,6 @@
 
 namespace
 {
-QString readTextFile(const QString &path)
-{
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-        return {};
-    QTextStream stream(&file);
-    return stream.readAll().trimmed();
-}
-
-QString loadSkillsPrompt(const QString &skillsDir)
-{
-    if (skillsDir.isEmpty())
-        return {};
-
-    QStringList blocks;
-    QDirIterator it(skillsDir, {QStringLiteral("SKILL.md")}, QDir::Files,
-                    QDirIterator::Subdirectories);
-    while (it.hasNext())
-    {
-        const QString path = it.next();
-        const QString raw = readTextFile(path);
-        if (raw.isEmpty())
-            continue;
-
-        QString name = QFileInfo(path).dir().dirName();
-        QString description;
-        QString body = raw;
-        if (raw.startsWith(QStringLiteral("---\n")))
-        {
-            const int secondFence = raw.indexOf(QStringLiteral("\n---\n"), 4);
-            if (secondFence > 0)
-            {
-                const QString frontmatter = raw.mid(4, secondFence - 4);
-                body = raw.mid(secondFence + 5).trimmed();
-                const QStringList lines = frontmatter.split(QLatin1Char('\n'));
-                for (const QString &line : lines)
-                {
-                    const int colon = line.indexOf(QLatin1Char(':'));
-                    if (colon <= 0)
-                        continue;
-                    const QString key = line.left(colon).trimmed();
-                    const QString value = line.mid(colon + 1).trimmed();
-                    if (key == QStringLiteral("name") && !value.isEmpty())
-                        name = value;
-                    else if (key == QStringLiteral("description"))
-                        description = value;
-                }
-            }
-        }
-
-        QString block = QStringLiteral("## %1").arg(name);
-        if (!description.isEmpty())
-            block += QStringLiteral("\nDescription: %1").arg(description);
-        if (!body.isEmpty())
-            block += QStringLiteral("\n%1").arg(body);
-        blocks.append(block.trimmed());
-    }
-
-    return blocks.join(QStringLiteral("\n\n"));
-}
 
 } // namespace
 
@@ -92,7 +31,9 @@ ConversationManager::ConversationManager(Config *config, Settings *settings,
     if (m_config)
     {
         m_indexMd = m_config->loadIndexMd();
-        m_skillsMd = loadSkillsPrompt(m_config->skillsPath());
+        m_skillsMd = m_registry && m_registry->skillManager()
+                         ? m_registry->skillManager()->buildSkillIndexPrompt()
+                         : QString();
         QDir().mkpath(conversationsDir());
         if (loadHistory)
             loadAll();

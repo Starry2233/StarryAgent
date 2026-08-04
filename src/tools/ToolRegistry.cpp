@@ -13,8 +13,10 @@
 #include "CliCustomTool.h"
 #include "EditTool.h"
 #include "ExecTool.h"
+#include "LoadSkillTool.h"
 #include "McpTool.h"
 #include "OverwriteTool.h"
+#include "ReadSkillReferenceTool.h"
 #include "RecallMemoryTool.h"
 #include "RootExecTool.h"
 #include "ScheduledTaskTools.h"
@@ -164,6 +166,11 @@ void ToolRegistry::loadBuiltIn()
             std::make_unique<RecallMemoryTool>(m_config->memoriesPath()));
         registerTool(
             std::make_unique<WriteMemoryTool>(m_config->memoriesPath()));
+        m_skillManager =
+            std::make_unique<SkillManager>(m_config->skillsPath(), m_settings);
+        registerTool(std::make_unique<LoadSkillTool>(m_skillManager.get()));
+        registerTool(
+            std::make_unique<ReadSkillReferenceTool>(m_skillManager.get()));
     }
 
     if (!parsed.is_array())

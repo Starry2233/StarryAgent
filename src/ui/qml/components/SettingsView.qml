@@ -15,6 +15,7 @@ Item {
     id: root
     property int selectedTab: 0
     property string themeUiError: ""
+    property string skillUiError: ""
     property int developerTapCount: 0
     readonly property bool developerSettingsVisibleThisSession: developerSettingsUnlockedAtStartup
     property bool developerSettingsUnlockedAtStartup: false
@@ -91,7 +92,7 @@ Item {
             anchors.leftMargin: root.headerLeadingInset
             spacing: theme.sp4
             Repeater {
-                model: [qsTr("General"), qsTr("Themes"), qsTr("Scheduled Tasks")]
+                model: [qsTr("General"), qsTr("Themes"), "Skill", qsTr("Scheduled Tasks")]
                 delegate: Item {
                     width: label.implicitWidth + theme.sp2
                     height: 32
@@ -1229,11 +1230,78 @@ Item {
     }
 
     ScheduledTasksView {
-        visible: root.selectedTab === 2
+        visible: root.selectedTab === 3
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: header.bottom
         anchors.bottom: parent.bottom
+    }
+
+    Connections {
+        target: androidPermissionBridge
+        function onRootApplied(path) {
+            root.rootSwitchStatusMessage = qsTr("Switched root directory.")
+            settings.load()
+            toast.showMessage(root.rootSwitchStatusMessage)
+        }
+        function onErrorOccurred(message) {
+            root.rootSwitchStatusMessage = message
+            toast.showMessage(message)
+        }
+        function onPermissionRequestLaunched(message) {
+            root.rootSwitchStatusMessage = message
+            toast.showMessage(message)
+        }
+    }
+    Connections {
+        target: filePicker
+        function onThemePackagePicked(path) {
+            if (path && path.length > 0)
+                themeManager.installTheme(path)
+        }
+        function onSkillPackagePicked(path) {
+            if (path && path.length > 0)
+                skillInstallManager.installSkillPackage(path)
+        }
+        function onErrorOccurred(message) {
+            root.themeUiError = message
+            root.skillUiError = message
+        }
+    }
+    Connections {
+        target: themeManager
+        function onLastErrorChanged() {
+            root.themeUiError = themeManager.lastError
+        }
+        function onThemeInstalled(themeId) {
+            root.themeUiError = ""
+        }
+    }
+    Connections {
+        target: skillInstallManager
+        function onLastErrorChanged() {
+            root.skillUiError = skillInstallManager.lastError
+        }
+        function onSkillInstalled(skillId) {
+            root.skillUiError = ""
+        }
+        function onSkillInstallFailed(error) {
+            root.skillUiError = error
+        }
+    }
+    Connections {
+        target: androidBackgroundRuntime
+        function onBatteryOptimizationIgnoredChanged() {
+            androidBackgroundRuntime.refreshBatteryOptimizationState()
+        }
+        function onErrorOccurred(message) {
+            root.androidBackgroundStatusMessage = message
+            toast.showMessage(message)
+        }
+        function onRequestLaunched(message) {
+            root.androidBackgroundStatusMessage = message
+            toast.showMessage(message)
+        }
     }
 
     Flickable {
@@ -1260,56 +1328,6 @@ Item {
                 font.pixelSize: 10
                 font.letterSpacing: 1
                 font.capitalization: Font.AllUppercase
-            }
-
-            Connections {
-                target: androidPermissionBridge
-                function onRootApplied(path) {
-                    root.rootSwitchStatusMessage = qsTr("Switched root directory.")
-                    settings.load()
-                    toast.showMessage(root.rootSwitchStatusMessage)
-                }
-                function onErrorOccurred(message) {
-                    root.rootSwitchStatusMessage = message
-                    toast.showMessage(message)
-                }
-                function onPermissionRequestLaunched(message) {
-                    root.rootSwitchStatusMessage = message
-                    toast.showMessage(message)
-                }
-            }
-            Connections {
-                target: filePicker
-                function onThemePackagePicked(path) {
-                    if (path && path.length > 0)
-                        themeManager.installTheme(path)
-                }
-                function onErrorOccurred(message) {
-                    root.themeUiError = message
-                }
-            }
-            Connections {
-                target: themeManager
-                function onLastErrorChanged() {
-                    root.themeUiError = themeManager.lastError
-                }
-                function onThemeInstalled(themeId) {
-                    root.themeUiError = ""
-                }
-            }
-            Connections {
-                target: androidBackgroundRuntime
-                function onBatteryOptimizationIgnoredChanged() {
-                    androidBackgroundRuntime.refreshBatteryOptimizationState()
-                }
-                function onErrorOccurred(message) {
-                    root.androidBackgroundStatusMessage = message
-                    toast.showMessage(message)
-                }
-                function onRequestLaunched(message) {
-                    root.androidBackgroundStatusMessage = message
-                    toast.showMessage(message)
-                }
             }
 
             Row {
@@ -1542,4 +1560,252 @@ Item {
             }
         }
     }
+
+    Flickable {
+        visible: root.selectedTab === 2
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: header.bottom
+        anchors.bottom: parent.bottom
+        anchors.topMargin: theme.sp4
+        contentHeight: skillCol.implicitHeight + theme.sp6
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+
+        Column {
+            id: skillCol
+            width: Math.min(parent.width - theme.sp6 * 2, 720)
+            anchors.horizontalCenter: parent.horizontalCenter
+            spacing: theme.sp4
+
+            Text {
+                text: "Skill"
+                color: theme.inkSoft
+                font.family: theme.fontBody
+                font.pixelSize: 10
+                font.letterSpacing: 1
+                font.capitalization: Font.AllUppercase
+            }
+
+            Column {
+                width: parent.width
+                spacing: theme.sp2
+
+                ThemeButton {
+                    text: qsTr("Import Skill Package")
+                    variant: "primary"
+                    onClicked: {
+                        const path = filePicker.pickSkillPackage()
+                        if (path && path.length > 0)
+                            skillInstallManager.installSkillPackage(path)
+                    }
+                }
+
+                Text {
+                    width: parent.width
+                    text: root.skillUiError.length > 0
+                          ? root.skillUiError
+                          : qsTr("Install location: %1").arg(config.skillsPath())
+                    color: root.skillUiError.length > 0 ? theme.clay : theme.inkSoft
+                    font.family: theme.fontMono
+                    font.pixelSize: 11
+                    wrapMode: Text.Wrap
+                }
+            }
+
+            Text {
+                visible: skillInstallManager.count === 0
+                width: parent.width
+                text: qsTr("No skills installed.")
+                color: theme.inkSoft
+                font.family: theme.fontBody
+                font.pixelSize: 12
+                wrapMode: Text.Wrap
+            }
+
+            Repeater {
+                model: skillInstallManager
+                delegate: Rectangle {
+                    required property string skillId
+                    required property string name
+                    required property string description
+                    required property string path
+                    required property int referenceCount
+                    required property bool enabled
+
+                    readonly property bool compactCard: width < 440
+
+                    width: skillCol.width
+                    height: compactCard ? Math.max(148, compactSkillContent.implicitHeight + theme.sp4)
+                                        : Math.max(104, wideSkillContent.implicitHeight + theme.sp4)
+                    radius: theme.rMd
+                    color: theme.surface
+                    border.width: 1
+                    border.color: theme.line
+
+                    Row {
+                        id: wideSkillContent
+                        visible: !compactCard
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.margins: theme.sp3
+                        spacing: theme.sp3
+
+                        Column {
+                            width: Math.max(120, parent.width - skillWideActions.width - theme.sp3)
+                            spacing: theme.sp1
+
+                            Text {
+                                width: parent.width
+                                text: name.length > 0 ? name : skillId
+                                color: theme.ink
+                                font.family: theme.fontBody
+                                font.pixelSize: 14
+                                font.weight: Font.Medium
+                                elide: Text.ElideRight
+                            }
+                            Text {
+                                width: parent.width
+                                text: skillId
+                                color: theme.inkSoft
+                                font.family: theme.fontMono
+                                font.pixelSize: 10
+                                elide: Text.ElideRight
+                            }
+                            Text {
+                                width: parent.width
+                                text: description.length > 0 ? description : qsTr("No description")
+                                color: theme.inkSoft
+                                font.family: theme.fontBody
+                                font.pixelSize: 12
+                                maximumLineCount: 2
+                                wrapMode: Text.Wrap
+                                elide: Text.ElideRight
+                            }
+                            Text {
+                                width: parent.width
+                                text: qsTr("%1 references").arg(referenceCount)
+                                color: theme.inkSoft
+                                font.family: theme.fontMono
+                                font.pixelSize: 10
+                                elide: Text.ElideRight
+                            }
+                            Text {
+                                width: parent.width
+                                text: path
+                                color: theme.inkSoft
+                                font.family: theme.fontMono
+                                font.pixelSize: 10
+                                elide: Text.ElideMiddle
+                            }
+                        }
+
+                        Row {
+                            id: skillWideActions
+                            width: 136
+                            spacing: theme.sp2
+                            anchors.verticalCenter: parent.verticalCenter
+
+                            Column {
+                                width: 44
+                                spacing: 0
+                                Components.MiuixSwitch {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    checked: enabled
+                                    onToggled: skillInstallManager.setSkillEnabled(skillId, checked)
+                                }
+                            }
+
+                            ThemeButton {
+                                width: 76
+                                text: qsTr("Remove")
+                                danger: true
+                                onClicked: skillInstallManager.uninstallSkill(skillId)
+                            }
+                        }
+                    }
+
+                    Column {
+                        id: compactSkillContent
+                        visible: compactCard
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.margins: theme.sp3
+                        spacing: theme.sp2
+
+                        Text {
+                            width: parent.width
+                            text: name.length > 0 ? name : skillId
+                            color: theme.ink
+                            font.family: theme.fontBody
+                            font.pixelSize: 14
+                            font.weight: Font.Medium
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            width: parent.width
+                            text: skillId
+                            color: theme.inkSoft
+                            font.family: theme.fontMono
+                            font.pixelSize: 10
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            width: parent.width
+                            text: description.length > 0 ? description : qsTr("No description")
+                            color: theme.inkSoft
+                            font.family: theme.fontBody
+                            font.pixelSize: 12
+                            maximumLineCount: 3
+                            wrapMode: Text.Wrap
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            width: parent.width
+                            text: qsTr("%1 references").arg(referenceCount)
+                            color: theme.inkSoft
+                            font.family: theme.fontMono
+                            font.pixelSize: 10
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            width: parent.width
+                            text: path
+                            color: theme.inkSoft
+                            font.family: theme.fontMono
+                            font.pixelSize: 10
+                            elide: Text.ElideMiddle
+                        }
+                        Row {
+                            width: parent.width
+                            spacing: theme.sp2
+                            Item {
+                                width: 44
+                                height: compactToggleCol.implicitHeight
+                                Column {
+                                    id: compactToggleCol
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    spacing: 0
+                                    Components.MiuixSwitch {
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        checked: enabled
+                                        onToggled: skillInstallManager.setSkillEnabled(skillId, checked)
+                                    }
+                                }
+                            }
+                            ThemeButton {
+                                width: parent.width - 44 - parent.spacing
+                                text: qsTr("Remove")
+                                danger: true
+                                onClicked: skillInstallManager.uninstallSkill(skillId)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
+
