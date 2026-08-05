@@ -1267,6 +1267,8 @@ Item {
             readonly property bool hasRenderableText: filtered.length > 0
             readonly property bool isActiveStreamingRow: root.active && root.active.streaming && rowIndex === list.count - 1
             property bool hovering: false
+            property bool actionBarHovered: false
+            property bool actionBarPressed: false
             function syncMarkdownView() {
                 if (!markdownLoader.item)
                     return
@@ -1288,13 +1290,20 @@ Item {
                 syncMarkdownView()
             }
             onHasRenderableTextChanged: syncMarkdownView()
-            onRowDataChanged: hovering = false
+            onRowDataChanged: {
+                hovering = false
+                actionBarHovered = false
+                actionBarPressed = false
+            }
 
             Timer {
                 id: hoverCloseTimer
                 interval: 120
                 repeat: false
-                onTriggered: assistantRow.hovering = false
+                onTriggered: {
+                    if (!assistantRow.actionBarHovered && !assistantRow.actionBarPressed)
+                        assistantRow.hovering = false
+                }
             }
 
             Row {
@@ -1361,78 +1370,104 @@ Item {
             Loader {
                 anchors.top: parent.top
                 anchors.right: parent.right
-                active: parent.hasRenderableText && !parent.thinking && parent.hovering
-                sourceComponent: Row {
+                active: parent.hasRenderableText && !parent.thinking && (parent.hovering || parent.actionBarHovered || parent.actionBarPressed)
+                sourceComponent: Item {
                     property var sourceRow: assistantRow
-                    spacing: theme.sp1
+                    implicitWidth: actionRow.implicitWidth
+                    implicitHeight: actionRow.implicitHeight
 
-                    Item {
-                        width: 40
-                        height: 24
+                    MouseArea {
+                        anchors.fill: parent
+                        acceptedButtons: Qt.NoButton
+                        hoverEnabled: true
+                        onEntered: {
+                            sourceRow.actionBarHovered = true
+                            hoverCloseTimer.stop()
+                        }
+                        onExited: {
+                            sourceRow.actionBarHovered = false
+                            if (!sourceRow.actionBarPressed)
+                                hoverCloseTimer.restart()
+                        }
+                    }
 
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: theme.rSm
-                            color: Qt.rgba(0.97, 0.95, 0.91, selectionCopyMouse.containsMouse ? 0.34 : 0.26)
-                            border.color: theme.line
-                            border.width: 1
+                    Row {
+                        id: actionRow
+                        spacing: theme.sp1
+
+                        Item {
+                            width: 40
+                            height: 24
+
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: theme.rSm
+                                color: Qt.rgba(0.97, 0.95, 0.91, selectionCopyMouse.containsMouse ? 0.34 : 0.26)
+                                border.color: theme.line
+                                border.width: 1
+                            }
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "Copy"
+                                color: theme.ink
+                                font.family: theme.fontBody
+                                font.pixelSize: 11
+                            }
+
+                            MouseArea {
+                                id: selectionCopyMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onPressed: sourceRow.actionBarPressed = true
+                                onReleased: sourceRow.actionBarPressed = false
+                                onCanceled: sourceRow.actionBarPressed = false
+                                onEntered: hoverCloseTimer.stop()
+                                onExited: hoverCloseTimer.restart()
+                                onClicked: {
+                                    clipboard.setText(sourceRow.filtered)
+                                    if (!clipboard.showCopyFeedback())
+                                        toast.showMessage("Copied")
+                                }
+                            }
                         }
 
-                        Text {
-                            anchors.centerIn: parent
-                            text: "Copy"
-                            color: theme.ink
-                            font.family: theme.fontBody
-                            font.pixelSize: 11
-                        }
+                        Item {
+                            width: 46
+                            height: 24
 
-                        MouseArea {
-                            id: selectionCopyMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onEntered: hoverCloseTimer.stop()
-                            onExited: hoverCloseTimer.restart()
-                            onClicked: {
-                                clipboard.setText(sourceRow.filtered)
-                                if (!clipboard.showCopyFeedback())
-                                    toast.showMessage("Copied")
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: theme.rSm
+                                color: Qt.rgba(0.97, 0.95, 0.91, selectionOpenMouse.containsMouse ? 0.34 : 0.26)
+                                border.color: theme.line
+                                border.width: 1
+                            }
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: qsTr("Select")
+                                color: theme.ink
+                                font.family: theme.fontBody
+                                font.pixelSize: 11
+                            }
+
+                            MouseArea {
+                                id: selectionOpenMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onPressed: sourceRow.actionBarPressed = true
+                                onReleased: sourceRow.actionBarPressed = false
+                                onCanceled: sourceRow.actionBarPressed = false
+                                onEntered: hoverCloseTimer.stop()
+                                onExited: hoverCloseTimer.restart()
+                                onClicked: root.openTextSelection(qsTr("Assistant Message"), sourceRow.filtered)
                             }
                         }
                     }
-
-                    Item {
-                        width: 46
-                        height: 24
-
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: theme.rSm
-                            color: Qt.rgba(0.97, 0.95, 0.91, selectionOpenMouse.containsMouse ? 0.34 : 0.26)
-                            border.color: theme.line
-                            border.width: 1
-                        }
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: qsTr("Select")
-                            color: theme.ink
-                            font.family: theme.fontBody
-                            font.pixelSize: 11
-                        }
-
-                        MouseArea {
-                            id: selectionOpenMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onEntered: hoverCloseTimer.stop()
-                            onExited: hoverCloseTimer.restart()
-                            onClicked: root.openTextSelection(qsTr("Assistant Message"), sourceRow.filtered)
-                        }
-                    }
                 }
-                z: 3
             }
         }
     }
