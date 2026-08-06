@@ -200,10 +200,157 @@ bool removePathRecursively(const QString &path)
         return QDir(path).removeRecursively();
     return QFile::remove(path);
 }
+
+bool inspectExtractedPackage(const QString &stagingPath,
+                            SkillPackageInspection *inspection,
+                            QString *error)
+{
+    const QStringList skillFiles = findSkillFiles(stagingPath);
+    if (skillFiles.isEmpty())
+    {
+        if (error)
+            *error = QStringLiteral("Skill package does not contain SKILL.md.");
+        return false;
+    }
+
+    QList<SkillPackageMetadata> parsed;
+    for (const QString &skillFile : skillFiles)
+    {
+        SkillPackageMetadata metadata;
+        if (!parseSkillFile(skillFile, &metadata, error))
+            return false;
+
+        metadata.relativePath = QDir::fromNativeSeparators(
+            QDir(stagingPath).relativeFilePath(skillFile));
+        parsed.append(metadata);
+    }
+
+    QList<SkillPackageMetadata> roots;
+    QList<SkillPackageMetadata> children;
+    for (const SkillPackageMetadata &metadata : parsed)
+    {
+        const QString relativeSkillFile = QDir::fromNativeSeparators(
+            QDir(stagingPath).relativeFilePath(metadata.skillFilePath));
+        const QString relativeInstallPath = QDir::fromNativeSeparators(
+            QDir(stagingPath).relativeFilePath(metadata.installPath));
+        const bool isArchiveRootSkillFile =
+            relativeSkillFile.compare(QStringLiteral("SKILL.md"),
+                                      Qt::CaseInsensitive) == 0;
+        const bool isSingleRootDirectorySkill =
+            parsed.size() == 1 &&
+            !relativeInstallPath.isEmpty() && relativeInstallPath != QStringLiteral(".") &&
+            !relativeInstallPath.contains(QLatin1Char('/'));
+
+        if (isArchiveRootSkillFile || isSingleRootDirectorySkill)
+            roots.append(metadata);
+        else
+            children.append(metadata);
+    }
+
+    if (roots.isEmpty())
+    {
+        if (error)
+            *error = QStringLiteral("Skill package is missing a parent SKILL.md.");
+        return false;
+    }
+    if (roots.size() > 1)
+    {
+        if (error)
+            *error = QStringLiteral("Skill package contains multiple parent SKILL.md files.");
+        return false;
+    }
+
+    if (inspection)
+    {
+        inspection->parent = roots.first();
+        inspection->children = children;
+    }
+    return true;
+}
+
+bool installExtractedSkill(const QString &stagingPath, const QString &skillsRoot,
+                           const QString &relativeSkillPath,
+                           SkillPackageMetadata *metadata, QString *error)
+{
+    const QString normalizedRelative = QDir::cleanPath(relativeSkillPath)
+                                           .replace(QLatin1Char('\\'), QLatin1Char('/'));
+    if (normalizedRelative.isEmpty() || normalizedRelative == QStringLiteral(".") ||
+        normalizedRelative.startsWith(QStringLiteral("../")) ||
+        normalizedRelative.contains(QStringLiteral("/../")))
+    {
+        if (error)
+            *error = QStringLiteral("Selected skill path is invalid.");
+        return false;
+    }
+
+    const QString sourceSkillFile = QDir(stagingPath).filePath(normalizedRelative);
+    if (!QFileInfo::exists(sourceSkillFile))
+    {
+        if (error)
+            *error = QStringLiteral("Selected SKILL.md was not found in the package.");
+        return false;
+    }
+
+    SkillPackageMetadata parsed;
+    if (!parseSkillFile(sourceSkillFile, &parsed, error))
+        return false;
+
+    parsed.relativePath = normalizedRelative;
+    const QString finalPath = QDir(skillsRoot).filePath(parsed.id);
+    if (QFileInfo::exists(finalPath) && !removePathRecursively(finalPath))
+    {
+        if (error)
+            *error = QStringLiteral("Failed to replace existing skill install.");
+        return false;
+    }
+
+    if (!QDir().rename(parsed.installPath, finalPath))
+    {
+        if (error)
+            *error = QStringLiteral("Failed to move skill into storage.");
+        return false;
+    }
+
+    if (metadata)
+    {
+        parsed.installPath = finalPath;
+        parsed.skillFilePath = QDir(finalPath).filePath(QStringLiteral("SKILL.md"));
+        *metadata = parsed;
+    }
+    return true;
+}
 } // namespace
 
 bool SkillPackageLoader::installSkillPackage(const QString &archivePath,
                                             const QString &skillsRoot,
+                                            SkillPackageMetadata *metadata,
+                                            QString *error)
+{
+    SkillPackageInspection inspection;
+    if (!inspectSkillPackage(archivePath, &inspection, error))
+        return false;
+    return installFromPackage(archivePath, skillsRoot,
+                              inspection.parent.relativePath, metadata, error);
+}
+
+bool SkillPackageLoader::inspectSkillPackage(const QString &archivePath,
+                                             SkillPackageInspection *inspection,
+                                             QString *error)
+{
+    const QString stagingPath =
+        QDir(QDir::tempPath()).filePath(QStringLiteral("starryagent-skill-inspect-%1")
+                                            .arg(QUuid::createUuid().toString(QUuid::WithoutBraces)));
+    if (!extractArchive(archivePath, stagingPath, error))
+        return false;
+
+    const bool ok = inspectExtractedPackage(stagingPath, inspection, error);
+    QDir(stagingPath).removeRecursively();
+    return ok;
+}
+
+bool SkillPackageLoader::installFromPackage(const QString &archivePath,
+                                            const QString &skillsRoot,
+                                            const QString &relativeSkillPath,
                                             SkillPackageMetadata *metadata,
                                             QString *error)
 {
@@ -222,50 +369,21 @@ bool SkillPackageLoader::installSkillPackage(const QString &archivePath,
     if (!extractArchive(archivePath, stagingPath, error))
         return false;
 
-    const QStringList skillFiles = findSkillFiles(stagingPath);
-    if (skillFiles.size() != 1)
-    {
-        QDir(stagingPath).removeRecursively();
-        if (error)
-        {
-            *error = skillFiles.isEmpty()
-                         ? QStringLiteral("Skill package does not contain SKILL.md.")
-                         : QStringLiteral("Skill package contains multiple SKILL.md files.");
-        }
-        return false;
-    }
-
-    SkillPackageMetadata parsed;
-    if (!parseSkillFile(skillFiles.first(), &parsed, error))
+    SkillPackageInspection inspection;
+    if (!inspectExtractedPackage(stagingPath, &inspection, error))
     {
         QDir(stagingPath).removeRecursively();
         return false;
     }
 
-    const QString finalPath = root.filePath(parsed.id);
-    if (QFileInfo::exists(finalPath) && !removePathRecursively(finalPath))
+    if (!installExtractedSkill(stagingPath, skillsRoot, relativeSkillPath, metadata,
+                               error))
     {
         QDir(stagingPath).removeRecursively();
-        if (error)
-            *error = QStringLiteral("Failed to replace existing skill install.");
-        return false;
-    }
-
-    if (!QDir().rename(parsed.installPath, finalPath))
-    {
-        QDir(stagingPath).removeRecursively();
-        if (error)
-            *error = QStringLiteral("Failed to move skill into storage.");
         return false;
     }
 
     QDir(stagingPath).removeRecursively();
-    if (metadata)
-    {
-        parsed.installPath = finalPath;
-        parsed.skillFilePath = QDir(finalPath).filePath(QStringLiteral("SKILL.md"));
-        *metadata = parsed;
-    }
     return true;
 }
 

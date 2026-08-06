@@ -1,6 +1,7 @@
 #include "SkillInstallManager.h"
 
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 
 #include "SkillManager.h"
@@ -16,7 +17,10 @@ SkillInstallManager::SkillInstallManager(Config *config, Settings *settings,
 {
     reload();
     if (m_config)
-        connect(m_config, &Config::rootDirChanged, this, &SkillInstallManager::reload);
+        connect(m_config, &Config::rootDirChanged, this, [this] {
+            clearPendingSelectionState();
+            reload();
+        });
 }
 
 int SkillInstallManager::rowCount(const QModelIndex &parent) const
@@ -56,6 +60,23 @@ QHash<int, QByteArray> SkillInstallManager::roleNames() const
             {PathRole, "path"},
             {ReferenceCountRole, "referenceCount"},
             {EnabledRole, "enabled"}};
+}
+
+QVariantList SkillInstallManager::pendingChildSkills() const
+{
+    QVariantList items;
+    items.reserve(m_pendingChildren.size());
+    for (const PendingChildSkillInfo &child : m_pendingChildren)
+    {
+        QVariantMap entry;
+        entry.insert(QStringLiteral("skillId"), child.skillId);
+        entry.insert(QStringLiteral("name"), child.name);
+        entry.insert(QStringLiteral("description"), child.description);
+        entry.insert(QStringLiteral("relativePath"), child.relativePath);
+        entry.insert(QStringLiteral("installed"), child.installed);
+        items.append(entry);
+    }
+    return items;
 }
 
 void SkillInstallManager::reload()
@@ -137,10 +158,19 @@ bool SkillInstallManager::installSkillPackage(const QString &archivePath)
         return false;
     }
 
-    SkillPackageMetadata metadata;
+    SkillPackageInspection inspection;
     QString error;
-    if (!SkillPackageLoader::installSkillPackage(archivePath, m_config->skillsPath(),
-                                                 &metadata, &error))
+    if (!SkillPackageLoader::inspectSkillPackage(archivePath, &inspection, &error))
+    {
+        setError(error);
+        emit skillInstallFailed(error);
+        return false;
+    }
+
+    SkillPackageMetadata parentMetadata;
+    if (!SkillPackageLoader::installFromPackage(archivePath, m_config->skillsPath(),
+                                                inspection.parent.relativePath,
+                                                &parentMetadata, &error))
     {
         setError(error);
         emit skillInstallFailed(error);
@@ -150,9 +180,77 @@ bool SkillInstallManager::installSkillPackage(const QString &archivePath)
     if (m_skillManager)
         m_skillManager->rescan();
     reload();
+
+    QList<PendingChildSkillInfo> children;
+    children.reserve(inspection.children.size());
+    for (const SkillPackageMetadata &child : inspection.children)
+    {
+        PendingChildSkillInfo item;
+        item.skillId = child.id;
+        item.name = child.name;
+        item.description = child.description;
+        item.relativePath = child.relativePath;
+        item.installed = indexOf(child.id) >= 0;
+        children.append(item);
+    }
+
+    if (!children.isEmpty())
+        setPendingSelection(archivePath, parentMetadata, children);
+    else
+        clearPendingSelectionState();
+
     setError(QString());
-    emit skillInstalled(metadata.id);
+    emit skillInstalled(parentMetadata.id);
     return true;
+}
+
+bool SkillInstallManager::completePendingChildInstall(const QString &relativeSkillPath)
+{
+    if (!hasPendingChildSelection())
+        return false;
+
+    const QString selectedPath = relativeSkillPath.trimmed();
+    if (selectedPath.isEmpty())
+        return false;
+
+    for (PendingChildSkillInfo &child : m_pendingChildren)
+    {
+        if (child.relativePath != selectedPath)
+            continue;
+        if (child.installed)
+        {
+            setError(QString());
+            emit pendingChildSelectionChanged();
+            return true;
+        }
+
+        QString error;
+        SkillPackageMetadata childMetadata;
+        if (!SkillPackageLoader::installFromPackage(m_pendingArchivePath,
+                                                    m_config ? m_config->skillsPath() : QString(),
+                                                    selectedPath, &childMetadata, &error))
+        {
+            setError(error);
+            emit skillInstallFailed(error);
+            return false;
+        }
+
+        child.installed = true;
+        if (m_skillManager)
+            m_skillManager->rescan();
+        reload();
+        setError(QString());
+        emit pendingChildSelectionChanged();
+        emit skillInstalled(childMetadata.id);
+        return true;
+    }
+
+    return false;
+}
+
+void SkillInstallManager::clearPendingChildSelection()
+{
+    clearPendingSelectionState();
 }
 
 bool SkillInstallManager::uninstallSkill(const QString &skillId)
@@ -208,6 +306,29 @@ void SkillInstallManager::setError(const QString &error)
         return;
     m_lastError = error;
     emit lastErrorChanged();
+}
+
+void SkillInstallManager::setPendingSelection(
+    const QString &archivePath, const SkillPackageMetadata &parent,
+    const QList<PendingChildSkillInfo> &children)
+{
+    m_pendingArchivePath = archivePath;
+    m_pendingParent = parent;
+    m_pendingChildren = children;
+    emit pendingChildSelectionChanged();
+}
+
+void SkillInstallManager::clearPendingSelectionState()
+{
+    if (m_pendingArchivePath.isEmpty() && m_pendingChildren.isEmpty() &&
+        m_pendingParent.id.isEmpty())
+    {
+        return;
+    }
+    m_pendingArchivePath.clear();
+    m_pendingParent = SkillPackageMetadata();
+    m_pendingChildren.clear();
+    emit pendingChildSelectionChanged();
 }
 
 int SkillInstallManager::indexOf(const QString &skillId) const

@@ -60,6 +60,15 @@ Item {
         }
     }
 
+    Loader {
+        id: childSkillWindowLoader
+        active: false
+        sourceComponent: Components.ChildSkillSelectionWindow {
+            dark: theme.dark
+        }
+    }
+
+
     // --- Header bar ---
     Rectangle {
         id: header
@@ -1279,6 +1288,18 @@ Item {
     }
     Connections {
         target: skillInstallManager
+        function onHasPendingChildSelectionChanged() {
+            if (Qt.platform.os === "android")
+                return
+            childSkillWindowLoader.active = skillInstallManager.hasPendingChildSelection
+            if (skillInstallManager.hasPendingChildSelection) {
+                if (childSkillWindowLoader.item)
+                    childSkillWindowLoader.item.openWindow()
+            } else if (childSkillWindowLoader.item) {
+                childSkillWindowLoader.item.closeWindow()
+                childSkillWindowLoader.active = false
+            }
+        }
         function onLastErrorChanged() {
             root.skillUiError = skillInstallManager.lastError
         }
