@@ -62,6 +62,8 @@ class Settings : public QObject
                    READ developerThemeOnAndroidEnabled
                    WRITE setDeveloperThemeOnAndroidEnabled NOTIFY
                        developerThemeOnAndroidEnabledChanged)
+    Q_PROPERTY(QStringList disabledSkillIds READ disabledSkillIds NOTIFY
+                   disabledSkillIdsChanged)
 
   public:
     explicit Settings(Config *config, QObject *parent = nullptr);
@@ -105,6 +107,8 @@ class Settings : public QObject
     {
         return m_developerThemeOnAndroidEnabled;
     }
+    QStringList disabledSkillIds() const { return m_disabledSkillIds; }
+    bool isSkillEnabled(const QString &skillId) const;
 
     void setApiBaseUrl(const QString &v);
     void setApiKey(const QString &v);
@@ -127,6 +131,8 @@ class Settings : public QObject
     void setDeveloperSettingsUnlocked(bool v);
     void setDeveloperSettingsEnabled(bool v);
     void setDeveloperThemeOnAndroidEnabled(bool v);
+    void setSkillEnabled(const QString &skillId, bool enabled);
+    void clearSkillState(const QString &skillId);
     Q_INVOKABLE void resetDeveloperSettings();
 
   signals:
@@ -150,6 +156,7 @@ class Settings : public QObject
     void developerSettingsUnlockedChanged();
     void developerSettingsEnabledChanged();
     void developerThemeOnAndroidEnabledChanged();
+    void disabledSkillIdsChanged();
 
   private:
     Config *m_config;
@@ -175,6 +182,7 @@ class Settings : public QObject
     bool m_developerSettingsUnlocked{false};
     bool m_developerSettingsEnabled{false};
     bool m_developerThemeOnAndroidEnabled{false};
+    QStringList m_disabledSkillIds;
 
     void persist(); // serialize current state to settings.json
 };

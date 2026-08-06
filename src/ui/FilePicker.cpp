@@ -18,6 +18,7 @@ namespace
 {
 constexpr int kImagePickerRequestCode = 0x5342;
 constexpr int kThemePickerRequestCode = 0x5343;
+constexpr int kSkillPickerRequestCode = 0x5344;
 
 QString suffixForUri(const QJniObject &resolver, const QJniObject &uri)
 {
@@ -277,6 +278,75 @@ QString FilePicker::pickThemePackage()
 
     return {};
 }
+
+QString FilePicker::pickSkillPackage()
+{
+    QJniObject context = QNativeInterface::QAndroidApplication::context();
+    if (!context.isValid())
+    {
+        emit errorOccurred(QStringLiteral("Android context unavailable"));
+        return {};
+    }
+
+    QJniObject action = QJniObject::fromString(
+        QStringLiteral("android.intent.action.OPEN_DOCUMENT"));
+    QJniObject intent("android/content/Intent", "(Ljava/lang/String;)V",
+                      action.object<jstring>());
+    if (!intent.isValid())
+    {
+        emit errorOccurred(
+            QStringLiteral("Failed to create skill package picker intent"));
+        return {};
+    }
+    intent.callObjectMethod(
+        "addCategory", "(Ljava/lang/String;)Landroid/content/Intent;",
+        QJniObject::fromString(
+            QStringLiteral("android.intent.category.OPENABLE"))
+            .object<jstring>());
+    intent.callObjectMethod(
+        "setType", "(Ljava/lang/String;)Landroid/content/Intent;",
+        QJniObject::fromString(QStringLiteral("*/*")).object<jstring>());
+
+    QPointer<FilePicker> guard(this);
+    QtAndroidPrivate::startActivity(
+        intent, kSkillPickerRequestCode,
+        [guard, context](int requestCode, int resultCode, const QJniObject &data)
+        {
+            if (!guard || requestCode != kSkillPickerRequestCode)
+                return;
+            if (resultCode != -1 || !data.isValid())
+            {
+                emit guard->errorOccurred(
+                    QStringLiteral("Skill package selection cancelled"));
+                return;
+            }
+            const QJniObject resolver = context.callObjectMethod(
+                "getContentResolver", "()Landroid/content/ContentResolver;");
+            if (!resolver.isValid())
+            {
+                emit guard->errorOccurred(
+                    QStringLiteral("Content resolver unavailable"));
+                return;
+            }
+            const QJniObject uri =
+                data.callObjectMethod("getData", "()Landroid/net/Uri;");
+            if (!uri.isValid())
+            {
+                emit guard->errorOccurred(QStringLiteral("No skill package selected"));
+                return;
+            }
+            const QString localPath = copyContentUriToTempFile(resolver, uri);
+            if (localPath.isEmpty())
+            {
+                emit guard->errorOccurred(
+                    QStringLiteral("Failed to import skill package"));
+                return;
+            }
+            emit guard->skillPackagePicked(localPath);
+        });
+
+    return {};
+}
 #else
 #include <QFileDialog>
 
@@ -296,6 +366,17 @@ QString FilePicker::pickThemePackage()
     QFileDialog dialog(
         nullptr, QStringLiteral("Select Theme Package"), QString(),
         QStringLiteral("Theme packages (*.tar.zst *.tzst *.tar.gz *.tgz)"));
+    dialog.setFileMode(QFileDialog::ExistingFile);
+    if (dialog.exec() != QDialog::Accepted)
+        return {};
+    return dialog.selectedFiles().value(0);
+}
+
+QString FilePicker::pickSkillPackage()
+{
+    QFileDialog dialog(
+        nullptr, QStringLiteral("Select Skill Package"), QString(),
+        QStringLiteral("Skill packages (*.zip *.tar.gz *.tgz)"));
     dialog.setFileMode(QFileDialog::ExistingFile);
     if (dialog.exec() != QDialog::Accepted)
         return {};

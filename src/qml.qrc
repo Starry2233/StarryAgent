@@ -25,6 +25,7 @@
         <file>ui/qml/components/ImagePreviewPane.qml</file>
         <file>ui/qml/components/ImagePreviewWindow.qml</file>
         <file>ui/qml/components/TextSelectionWindow.qml</file>
+        <file>ui/qml/components/ChildSkillSelectionWindow.qml</file>
         <file>ui/qml/components/TableBlock.qml</file>
         <file>ui/qml/components/LatexBlock.qml</file>
         <file>ui/qml/components/PaperGrain.qml</file>

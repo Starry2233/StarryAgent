@@ -347,9 +347,12 @@ target("starryagent")
               "src/tools/BroadcastTool.cpp", "src/tools/CliCustomTool.cpp",
               "src/tools/McpTool.cpp", "src/tools/MemoryToolUtils.cpp",
               "src/tools/RecallMemoryTool.cpp", "src/tools/WriteMemoryTool.cpp",
+              "src/tools/LoadSkillTool.cpp", "src/tools/ReadSkillReferenceTool.cpp",
               "src/tools/ScheduledTaskTools.cpp",
               "src/tools/tools_smoke.cpp")
     add_files("src/tools/ToolRegistry.h")                   -- moc (Q_OBJECT)
+    add_files("src/skills/SkillManager.cpp", "src/skills/SkillInstallManager.cpp", "src/skills/SkillPackageLoader.cpp")
+    add_files("src/skills/SkillInstallManager.h") -- moc (Q_OBJECT)
     add_files("src/chat/Conversation.cpp", "src/chat/ConversationManager.cpp", "src/chat/ScheduledTaskManager.cpp", "src/chat/CompactSupport.cpp")
     add_files("src/chat/Conversation.h", "src/chat/ConversationManager.h", "src/chat/ScheduledTaskManager.h")  -- moc (Q_OBJECT)
     add_files("src/ui/MarkdownParser.cpp")

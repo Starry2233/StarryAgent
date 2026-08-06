@@ -33,6 +33,7 @@
 #include "core/LanguageManager.h"
 #include "core/ProcessMemoryLimiter.h"
 #include "core/Settings.h"
+#include "skills/SkillInstallManager.h"
 #include "tools/ToolRegistry.h"
 #include "theme/ThemeManager.h"
 #include "tools/tools_smoke.h"
@@ -485,6 +486,7 @@ int main(int argc, char *argv[])
                                    .arg(DebugTrace::logType()));
 
     ToolRegistry toolRegistry(&config, &settings);
+    SkillInstallManager skillInstallManager(&config, &settings, toolRegistry.skillManager());
     // Each Conversation owns its own OpenAIClient (created lazily on first
     // send), so multiple conversations can stream in parallel. The manager
     // injects the shared Settings + ToolRegistry into each conversation.
@@ -578,6 +580,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("settings", &settings);
     engine.rootContext()->setContextProperty("languageManager", &languageManager);
     engine.rootContext()->setContextProperty("themeManager", &themeManager);
+    engine.rootContext()->setContextProperty("skillInstallManager", &skillInstallManager);
     engine.rootContext()->setContextProperty("toolRegistry", &toolRegistry);
     engine.rootContext()->setContextProperty("conversations", &conversations);
     engine.rootContext()->setContextProperty("scheduledTasks", &scheduledTasks);

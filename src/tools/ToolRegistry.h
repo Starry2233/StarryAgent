@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "Tool.h"
+#include "skills/SkillManager.h"
 
 class Config;
 class ScheduledTaskManager;
@@ -45,6 +46,7 @@ class ToolRegistry : public QObject
     Q_INVOKABLE bool exists(const QString &id) const;
     // Whether the tool requires per-call approval (for the ToolCallCard UI).
     Q_INVOKABLE bool permissionRequired(const QString &id) const;
+    SkillManager *skillManager() const { return m_skillManager.get(); }
 
     // Dispatch an approved tool call. Runs execute() on a worker thread;
     // emits toolFinished when done. Safe to call from QML.
@@ -62,6 +64,7 @@ class ToolRegistry : public QObject
 
     Config *m_config;
     Settings *m_settings = nullptr;
+    std::unique_ptr<SkillManager> m_skillManager;
     std::vector<std::unique_ptr<Tool>> m_tools;
     std::unordered_map<QString, Tool *>
         m_byId; // non-owning; points into m_tools

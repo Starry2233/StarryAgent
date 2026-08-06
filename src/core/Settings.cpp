@@ -45,6 +45,18 @@ QString normalizedLanguage(const QString &input)
         return language;
     return QStringLiteral("zh_CN");
 }
+
+QStringList normalizedSkillIds(const QStringList &input)
+{
+    QStringList out;
+    for (const QString &entry : input)
+    {
+        const QString trimmed = entry.trimmed();
+        if (!trimmed.isEmpty() && !out.contains(trimmed, Qt::CaseInsensitive))
+            out.append(trimmed);
+    }
+    return out;
+}
 } // namespace
 
 Settings::Settings(Config *config, QObject *parent)
@@ -133,6 +145,17 @@ void Settings::load()
         if (j.contains("developerThemeOnAndroidEnabled"))
             m_developerThemeOnAndroidEnabled =
                 j["developerThemeOnAndroidEnabled"].get<bool>();
+        if (j.contains("disabledSkillIds") && j["disabledSkillIds"].is_array())
+        {
+            QStringList list;
+            for (const auto &entry : j["disabledSkillIds"])
+            {
+                if (entry.is_string())
+                    list.append(
+                        QString::fromStdString(entry.get<std::string>()));
+            }
+            m_disabledSkillIds = normalizedSkillIds(list);
+        }
         if (!m_models.contains(m_model))
             m_models.prepend(m_model);
         m_models = normalizedModels(m_models);
@@ -174,6 +197,9 @@ void Settings::persist()
     j["developerSettingsUnlocked"] = m_developerSettingsUnlocked;
     j["developerSettingsEnabled"] = m_developerSettingsEnabled;
     j["developerThemeOnAndroidEnabled"] = m_developerThemeOnAndroidEnabled;
+    j["disabledSkillIds"] = json::array();
+    for (const QString &skillId : m_disabledSkillIds)
+        j["disabledSkillIds"].push_back(skillId.toStdString());
     m_config->saveSettings(QByteArray::fromStdString(j.dump(4)));
 }
 
@@ -381,6 +407,48 @@ void Settings::setDeveloperThemeOnAndroidEnabled(bool v)
         persist();
     }
 }
+
+bool Settings::isSkillEnabled(const QString &skillId) const
+{
+    const QString id = skillId.trimmed();
+    if (id.isEmpty())
+        return true;
+    for (const QString &disabledId : m_disabledSkillIds)
+    {
+        if (disabledId.compare(id, Qt::CaseInsensitive) == 0)
+            return false;
+    }
+    return true;
+}
+
+void Settings::setSkillEnabled(const QString &skillId, bool enabled)
+{
+    const QString id = skillId.trimmed();
+    if (id.isEmpty())
+        return;
+
+    QStringList next = m_disabledSkillIds;
+    next = normalizedSkillIds(next);
+    for (int i = next.size() - 1; i >= 0; --i)
+    {
+        if (next.at(i).compare(id, Qt::CaseInsensitive) == 0)
+            next.removeAt(i);
+    }
+    if (!enabled)
+        next.append(id);
+    next = normalizedSkillIds(next);
+    if (next == m_disabledSkillIds)
+        return;
+    m_disabledSkillIds = next;
+    emit disabledSkillIdsChanged();
+    persist();
+}
+
+void Settings::clearSkillState(const QString &skillId)
+{
+    setSkillEnabled(skillId, true);
+}
+
 void Settings::resetDeveloperSettings()
 {
     const bool enabledChanged = m_developerSettingsEnabled;

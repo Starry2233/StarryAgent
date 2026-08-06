@@ -80,3 +80,6 @@ Desktop.ini
 tmp_repro/
 .cache/
 compile_commands.json
+tests/fixtures/skill-packages/example-skill-with-refs.tar.gz
+tests/fixtures/skill-packages/example-skill-with-refs.tgz
+tests/fixtures/skill-packages/example-skill-with-refs.zip
