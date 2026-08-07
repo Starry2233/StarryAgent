@@ -1,8 +1,8 @@
 import QtQuick
-import QtQuick.Window
 import QtQuick.Controls
+import StarryAgent 1.0
 
-Window {
+StarryWindow {
     id: root
 
     width: 560
@@ -27,9 +27,9 @@ Window {
         visible = false
     }
 
-    onClosing: function(close) {
-        close.accepted = true
-        skillInstallManager.clearPendingChildSelection()
+    onVisibleChanged: {
+        if (!visible)
+            skillInstallManager.clearPendingChildSelection()
     }
 
     Rectangle {

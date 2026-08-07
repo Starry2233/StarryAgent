@@ -1,8 +1,8 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Window
+import StarryAgent 1.0
 
-Window {
+StarryWindow {
     id: root
 
     width: 920

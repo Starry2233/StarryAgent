@@ -2,6 +2,8 @@
 
 #ifndef Q_OS_ANDROID
 
+#include "AppWindowChrome.h"
+
 #include <QApplication>
 #include <QClipboard>
 #include <QHBoxLayout>
@@ -77,6 +79,7 @@ void DesktopSelectionWindow::ensureWindow()
     m_editor->setLineWrapMode(QPlainTextEdit::WidgetWidth);
     layout->addWidget(m_editor, 1);
 
+    AppWindowChrome::applyToWidget(m_window, false);
     applyTheme(false);
 }
 

@@ -14,6 +14,16 @@ ApplicationWindow {
     color: theme.hasWallpaper ? "transparent" : theme.paper
     title: qsTr("StarryAgent")
 
+    function shouldHandleAndroidBackInQml() {
+        if (Qt.platform.os !== "android")
+            return true
+        if (config.firstLaunch)
+            return true
+        return shell.drawerOpen
+                || shell.destination === "settings"
+                || (shell.destination === "picker" && conversations.active)
+    }
+
     function handleAndroidBack() {
         if (Qt.platform.os !== "android")
             return false
@@ -31,13 +41,13 @@ ApplicationWindow {
             shell._navOverride = null
             return true
         }
-        androidBackgroundRuntime.moveTaskToBack()
-        return true
+        return false
     }
 
     Shortcut {
         sequences: [StandardKey.Back]
         context: Qt.ApplicationShortcut
+        enabled: win.shouldHandleAndroidBackInQml()
         onActivated: win.handleAndroidBack()
     }
 

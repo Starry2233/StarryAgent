@@ -185,7 +185,8 @@ bool AndroidBackgroundRuntime::moveTaskToBack()
     QJniObject activity = QNativeInterface::QAndroidApplication::context();
     if (!activity.isValid())
         return false;
-    return activity.callMethod<jboolean>("moveTaskToBack", "(Z)Z", jboolean(true));
+    activity.callMethod<void>("moveTaskToBackFromQt", "()V");
+    return true;
 #else
     return false;
 #endif

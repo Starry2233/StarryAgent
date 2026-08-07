@@ -1,10 +1,10 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Window
 import QtMultimedia
+import StarryAgent 1.0
 
-Window {
+StarryWindow {
     id: root
 
     property bool dark: false

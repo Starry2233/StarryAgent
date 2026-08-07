@@ -1,11 +1,11 @@
 import QtQuick
-import QtQuick.Window
 import QtQuick.Controls
+import StarryAgent 1.0
 
 // PropertiesDialog — a desktop modal window showing a conversation's
 // metadata (id / title / mode / created / updated). Read-only. Mobile gets
 // an in-page overlay variant (see Sidebar).
-Window {
+StarryWindow {
     id: dlg
     modality: Qt.ApplicationModal
     flags: Qt.Dialog
