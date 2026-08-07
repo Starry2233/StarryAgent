@@ -159,7 +159,7 @@ namespace
               ########
 */
 // Okii (Imoo) is the worst company I've ever seen, they enjoy the CLOSE-SOURCE Linux kernel source every day
-// and they removed open-source apps from their app store replacing them with their own closed-source apps,
+// and they removed libre apps from their app store replacing them with their own closed-source apps,
 // so Okii, fuck you, and I hope your company goes bankrupt. StarryAgent will not run on Okii devices for security reasons.
 // By the way, if you are using Okii's device, please use other devices for armeabi-v7a architecture, thank you.
 
