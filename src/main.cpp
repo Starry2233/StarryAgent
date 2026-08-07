@@ -164,7 +164,7 @@ namespace
 // By the way, if you are using Okii's device, please use other devices for armeabi-v7a architecture, thank you.
 
 // 对中国用户：
-// 小天才是我见过的最糟糕的公司，他们每天都在享受闭源的 Linux 内核源码，并且他们从应用商店中移除了开源应用，
+// 小天才是我见过的最糟糕的公司，他们每天都在享受闭源的 Linux 内核源码，并且他们从应用商店中移除了自由应用，
 // 用他们自己的闭源应用替换了它们，所以小天才，去你妈的，我希望你们公司破产。StarryAgent 不会在小天才设备上运行，出于安全原因。
 // 顺便说一句，如果您正在使用 Okii 的设备，请在 armeabi-v7a 架构上使用其他设备，谢谢。
 // 还有如果你在小天才设备上root并且被云控封了30天及以上，欢迎加入小天才讨论邮件列表 xtc-community@googlegroups.com
