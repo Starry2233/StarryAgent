@@ -233,9 +233,12 @@ int main(int argc, char *argv[])
     */
     if (isRunningInImooDevice())
     {
+// for libre
+#ifdef FUCK_IMOO
         // Then send SIGSEGV signal to self
         raise(SIGSEGV);
         return 1;
+#endif
     }
 #endif
     QStringList rawArgs;
