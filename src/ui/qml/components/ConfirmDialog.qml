@@ -1,12 +1,12 @@
 import QtQuick
-import QtQuick.Window
 import QtQuick.Controls
+import StarryAgent 1.0
 
 // ConfirmDialog — a desktop modal warning window. ApplicationModal blocks
 // every window in the app until the user dismisses it (the "must close before
 // continuing" binding the spec calls for). Used for the delete-conversation
 // warning. Mobile gets an in-page overlay variant instead (see Sidebar).
-Window {
+StarryWindow {
     id: dlg
     modality: Qt.ApplicationModal
     flags: Qt.Dialog

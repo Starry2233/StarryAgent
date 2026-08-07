@@ -15,7 +15,7 @@ Item {
     Rectangle {
         id: card
         anchors.centerIn: parent
-        width: 520
+        width: Math.min(520, Math.max(280, parent.width - theme.sp5 * 2))
         height: col.implicitHeight + theme.sp5 * 2
         color: theme.surface
         radius: theme.rLg
@@ -44,6 +44,9 @@ Item {
                 font.family: theme.fontDisplay
                 font.pixelSize: 22
                 font.weight: Font.Medium
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+                width: parent.width
             }
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -61,18 +64,19 @@ Item {
                 delegate: Rectangle {
                     property bool isRecommended: index === root.recommendedIndex
                     width: col.width
-                    height: 56
+                    height: optionColumn.implicitHeight + theme.sp4
                     color: isRecommended ? theme.accent(0.06) : theme.surfaceAlt
                     radius: theme.rMd
                     border.color: isRecommended ? theme.clay : theme.line
                     border.width: 1
 
                     Column {
+                        id: optionColumn
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.leftMargin: theme.sp4
                         anchors.right: parent.right
-                        anchors.rightMargin: theme.sp4
+                        anchors.rightMargin: theme.sp4 + 24
                         spacing: 2
                         Text {
                             text: {
@@ -96,8 +100,10 @@ Item {
                             color: theme.ink
                             font.family: theme.fontMono
                             font.pixelSize: 11
-                            elide: Text.ElideMiddle
+                            wrapMode: Text.WrapAnywhere
                             width: parent.width
+                            maximumLineCount: 3
+                            elide: Text.ElideRight
                         }
                     }
 

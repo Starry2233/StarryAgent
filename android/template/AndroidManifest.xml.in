@@ -16,6 +16,9 @@
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <supports-screens
         android:anyDensity="true"
@@ -47,8 +50,13 @@
 
             <meta-data
                 android:name="android.app.arguments"
-                android:value="--rhi software" />
+                android:value="" />
         </activity>
+
+        <service
+            android:name="moe.starry2233.StarryAgent.StarryBackgroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
