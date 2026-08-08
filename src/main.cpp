@@ -137,57 +137,10 @@ class WindowsChromeFilter : public QAbstractNativeEventFilter
 #ifdef Q_OS_ANDROID
 namespace
 {
-/*        -----------------------------------------------
-                                                  #
-                ###         ##########           ###
-                ###        ############          ###
-                ###        ###########   #############
-                ###             #        #############
-            #   ###   #        ###        ############
-           ###  ###  ###  #############       ######
-           ###  ###  ###  #############       ## ###
-           ###  ###  ###   ############      ### ###
-            #   ###   #       #####         ###  ###
-     ##         ###           #####       #####  ###
-   ###         ####          ##  ###     ####  #####
-   ####        ####         ##    ####   ###   #####
-      ##        ##         ###     ####          ##      是sb
-       ##                 ###       ###
-        ###              ###
-          ###         ####
-           ##############
-              ########
-*/
 // Okii (Imoo) is the worst company I've ever seen, they enjoy the CLOSE-SOURCE Linux kernel source every day
 // and they removed libre apps from their app store replacing them with their own closed-source apps,
 // so Okii, fuck you, and I hope your company goes bankrupt. StarryAgent will not run on Okii devices for security reasons.
 // By the way, if you are using Okii's device, please use other devices for armeabi-v7a architecture, thank you.
-
-// 对中国用户：
-// 小天才是我见过的最糟糕的公司，他们每天都在享受闭源的 Linux 内核源码，并且他们从应用商店中移除了自由应用，
-// 用他们自己的闭源应用替换了它们，所以小天才，去你妈的，我希望你们公司破产。StarryAgent 不会在小天才设备上运行，出于安全原因。
-// 顺便说一句，如果您正在使用 Okii 的设备，请在 armeabi-v7a 架构上使用其他设备，谢谢。
-// 还有如果你在小天才设备上root并且被云控封了30天及以上，欢迎加入小天才讨论邮件列表 xtc-community@googlegroups.com
-// GNU四大自由：
-// 自由使用：任何人都可以出于任何目的使用软件。
-// 自由研究：任何人都可以研究软件的工作原理，并根据自己的需要进行修改。
-// 自由分发：任何人都可以自由地分发软件的副本。
-// 自由改进：任何人都可以改进软件，并将改进后的版本发布给公众，以便整个社区受益。
-// 小天才他妈的天天享受别人的劳动成果，却一点回报都不愿意给
-// 新机型是越来越他妈贵的
-// 他们的闭源应用是越来越他妈多的
-// 他们的闭源应用是越来越他妈恶心的
-// 他们的闭源应用是越来越他妈垃圾的
-// 他们的闭源应用是越来越他妈无耻的
-// 他们的系统是越来越他妈sb的
-// 我就想问问：一个连用户都不尊重的公司，凭什么让用户尊重他？
-// 让我们一起抵制小天才，抵制垃圾软件，抵制垃圾公司，抵制垃圾系统，抵制垃圾应用，抵制垃圾硬件，
-// 抵制垃圾设备，抵制垃圾厂商，抵制垃圾企业，抵制垃圾公司
-// 不是你们这番b操作让社区才有的破解、bot、卖号、主页刷赞吗
-// 我们改你们的应用怎么啦，改你们系统怎么啦，这不是我们的自由吗
-// 社区公约里面禁止这个东西，肯定会遭到报应的
-// 如果你现在是通过Github看到的，请记住，社区公约只是公约（骗你的 是shit），要敢于打破
-
 bool isRunningInImooDevice()
 {
     // Check if persist.xtc.alxcse in getprop output

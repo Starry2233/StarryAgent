@@ -481,6 +481,7 @@ QJsonArray Conversation::buildMessagesFromRow(int startRow) const
     }
     sys.insert("content", systemPrompt);
     out.append(sys);
+    QString scheduledAnchorContent;
     if (!m_scheduledInstruction.isEmpty())
     {
         QJsonObject scheduled;
@@ -489,47 +490,55 @@ QJsonArray Conversation::buildMessagesFromRow(int startRow) const
             "content",
             QStringLiteral(
                 "You are now executing an already-created autonomous "
-                "scheduled task. The task has already been created and has "
-                "already fired. This turn is the execution phase, not the "
-                "creation phase. create_scheduled_task is forbidden in this "
-                "turn unless the task instruction explicitly requires "
-                "scheduled-task management. Do not create, reschedule, "
-                "search, or delete any scheduled task unless the task "
-                "instruction explicitly requires scheduled-task "
-                "management. Do not mention a user message or ask for "
-                "approval. This scheduled execution turn has full tool "
-                "permissions by default, regardless of whether bypass "
-                "permissions is enabled in settings. Complete the task, use "
-                "tools when needed, then report only the concrete execution "
-                "result for this run. Do not say the task was just set, do "
-                "not say it will trigger later, do not restate the schedule, "
-                "and do not acknowledge task creation success. Treat the "
-                "schedule as already elapsed and the trigger as already "
-                "happened. When carrying out this scheduled task, use the "
-                "current local date/time from the system prompt as the "
+                "scheduled task. This turn is the execution phase, not a "
+                "continuation of the previous chat turn and not the task "
+                "creation, editing, postponement, deletion, or confirmation "
+                "phase. Historical conversation messages are available only "
+                "as background for understanding what the task should do; do "
+                "not treat old assistant confirmations, old postponement "
+                "messages, old schedule-management replies, or an unanswered "
+                "previous assistant message as the current instruction. "
+                "create_scheduled_task is forbidden in this turn unless the "
+                "task instruction explicitly requires scheduled-task "
+                "management. Do not create, reschedule, search, or delete any "
+                "scheduled task unless the task instruction explicitly "
+                "requires scheduled-task management. Do not mention a user "
+                "message or ask for approval. This scheduled execution turn "
+                "has full tool permissions by default, regardless of whether "
+                "bypass permissions is enabled in settings. Complete the task, "
+                "use tools when needed, then report only the concrete "
+                "execution result for this run. Do not say the task was just "
+                "set, do not say it will trigger later, do not restate the "
+                "schedule, and do not acknowledge task creation success. "
+                "Treat the schedule as already elapsed and the trigger as "
+                "already happened. If the visible history contains postponed, "
+                "skipped, deleted, created, or rescheduled task-management "
+                "language, treat it as a past management event unless the "
+                "current trigger message explicitly asks you to manage the "
+                "schedule again. When carrying out this scheduled task, use "
+                "the current local date/time from the system prompt as the "
                 "authoritative current time for this run, and explicitly take "
                 "that current time into account if the task depends on timing "
                 "or schedule context.\n\nTask being executed right now:\n%1")
                 .arg(m_scheduledInstruction));
         out.append(scheduled);
 
-        QJsonObject scheduledAnchor;
-        scheduledAnchor.insert("role", "user");
-        scheduledAnchor.insert(
-            "content",
-            QStringLiteral(
-                "This turn is a scheduled-task execution turn. The scheduled "
-                "task was created earlier and has already triggered. This is "
-                "not a task-creation request, not a scheduling confirmation, "
-                "and not a future reminder setup. There is no new user reply "
-                "to answer right now. Do not say the task was just set, do "
-                "not say it will trigger later, do not repeat the schedule, "
-                "and do not acknowledge creation success. Treat the trigger "
-                "as already happened, execute the already-triggered task "
-                "below, and reply only with the concrete execution result for "
-                "this run.\n\nUser task to execute right now:\n%1")
-                .arg(m_scheduledInstruction));
-        out.append(scheduledAnchor);
+        scheduledAnchorContent = QStringLiteral(
+            "This is the current trigger message for an already-fired "
+            "scheduled task. The task was created earlier and has already "
+            "triggered now. This is not a task-creation request, not a "
+            "scheduling confirmation, not a postponement continuation, and "
+            "not a future reminder setup. Any earlier messages about adding, "
+            "deleting, postponing, skipping, or rescheduling this task are "
+            "past management context only. There is no new user reply to "
+            "answer right now. Use the conversation history only to recover "
+            "the task's source requirements and constraints. Do not say the "
+            "task was just set, do not say it will trigger later, do not "
+            "repeat the schedule, and do not acknowledge creation success. "
+            "Treat the trigger as already happened, execute the task below, "
+            "and reply only with the concrete execution result for this "
+            "run.\n\nUser task to execute right now:\n%1")
+                                     .arg(m_scheduledInstruction);
     }
     if (!m_compactSummary.trimmed().isEmpty())
     {
@@ -687,6 +696,13 @@ QJsonArray Conversation::buildMessagesFromRow(int startRow) const
             }
             ++i;
         }
+    }
+    if (!scheduledAnchorContent.isEmpty())
+    {
+        QJsonObject scheduledAnchor;
+        scheduledAnchor.insert("role", "user");
+        scheduledAnchor.insert("content", scheduledAnchorContent);
+        out.append(scheduledAnchor);
     }
     DebugTrace::verbose(
         "conversation",
