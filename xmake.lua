@@ -170,6 +170,9 @@ else
     table.insert(libarchive_sources, "external/libarchive/libarchive/filter_fork_posix.c")
 end
 set_languages("c++20")
+if is_plat("windows") and is_arch("arm64") then
+    add_cxflags("/utf-8")
+end
 -- set_arch("x64")
 -- Prefer ccache when it is available. xmake falls back to the configured
 -- compiler toolchain when no compatible ccache executable is found.
