@@ -26,6 +26,9 @@ Item {
     property var commandSuggestions: []
     property int commandSelectionIndex: 0
     readonly property bool isAndroid: Qt.platform.os === "android"
+    readonly property real inputFieldMinHeight: 52
+    readonly property real inputFieldMaxHeight: 140
+    readonly property real inputBarMaxHeight: 280
     readonly property bool commandMode: inputField.text.length > 0 && inputField.text.charAt(0) === "/"
     readonly property bool commandMenuVisible: commandMode && commandSuggestions.length > 1
     readonly property string commandQuery: commandMode ? inputField.text.trim() : ""
@@ -904,11 +907,20 @@ Item {
         anchors.leftMargin: theme.sp3
         anchors.rightMargin: theme.sp3
         anchors.bottomMargin: theme.sp3
-        height: root.pendingImagePaths.length > 0 ? 224 : ((root.commandMode && !root.commandMenuVisible) ? 138 : 110)
+        readonly property bool imagesVisible: root.pendingImagePaths.length > 0
+        readonly property bool commandHintVisible: root.commandMode && !root.commandMenuVisible
+        readonly property real contentHeight: theme.sp2 * 2
+                                              + (imagesVisible ? 76 + theme.sp2 : 0)
+                                              + (commandHintVisible ? 28 + theme.sp2 : 0)
+                                              + inputField.height
+                                              + theme.sp2
+                                              + 32
+        height: Math.min(contentHeight, root.inputBarMaxHeight)
 
         Rectangle {
             id: card
             anchors.fill: parent
+            clip: true
             color: theme.surface
             radius: theme.rLg
             border.color: inputField.activeFocus ? theme.accent(theme.dark ? 0.52 : 0.36) : theme.line
@@ -1011,7 +1023,7 @@ Item {
                 TextArea {
                     id: inputField
                     width: parent.width
-                    height: 52
+                    height: Math.max(root.inputFieldMinHeight, Math.min(contentHeight, root.inputFieldMaxHeight))
                     color: theme.ink   // black text in light mode
                     selectedTextColor: theme.dark ? theme.paper : "white"
                     selectionColor: theme.clay
