@@ -141,7 +141,7 @@ Item {
             delegate: Item {
                 id: segmentDelegate
                 width: Math.max(0, parent ? parent.width : root.width)
-                height: contentLoader.item ? (contentLoader.item.implicitHeight || contentLoader.item.height || 0) : 0
+                height: contentLoader.item ? Math.max(0, contentLoader.item.implicitHeight) : 0
                 readonly property var segmentData: modelData
                 readonly property int segmentIndex: index
 
@@ -155,7 +155,7 @@ Item {
                     id: contentLoader
                     anchors.left: parent.left
                     anchors.right: parent.right
-                    asynchronous: root.deferSegments
+                    asynchronous: root.deferSegments && !(typeof list !== "undefined" && list && (list.autoScroll || list.shouldKeepBottomPinned))
                     onLoaded: {
                         if (!item)
                             return

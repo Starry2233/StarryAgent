@@ -104,6 +104,10 @@ Item {
             conversations.saveActive()
             return
         }
+        if (list) {
+            list.enableAutoScroll("send")
+            list.scheduleFollowScroll(false)
+        }
         root.active.sendWithImages(text, pendingImagePaths)
         pendingImagePaths = []
         conversations.saveActive()
@@ -316,7 +320,7 @@ Item {
         if (row.kind === "assistant") {
             const visibleText = filterThink(row.text || "")
             if (visibleText.length === 0)
-                return 0
+                return theme.sp4
             const lineEstimate = Math.max(1, Math.ceil(visibleText.length / 42))
             return 20 + Math.min(20, lineEstimate) * 21
         }
@@ -485,13 +489,34 @@ Item {
             property bool initialBottomRestore: false
             property int initialRestoreRevision: 0
             property int initialRestoreTimerRevision: 0
+            property bool suppressAutoScrollTracking: false
             readonly property real _bottomSlack: 40   // px tolerance for "at bottom"
             readonly property bool shouldFollowAssistant: root.active
                 && root.active.streaming
+            readonly property bool shouldKeepBottomPinned: autoScroll && root.active
+                && (root.active.streaming || pendingImagePaths.length > 0)
             property bool pendingAnimatedFollow: false
 
             function targetBottomY() {
-                return Math.max(0, contentHeight - height)
+                const origin = Number.isFinite(originY) ? originY : 0
+                const extent = Number.isFinite(contentHeight) ? contentHeight : 0
+                const viewport = Number.isFinite(height) ? height : 0
+                return origin + Math.max(0, extent - viewport)
+            }
+
+            function atBottom() {
+                if (!Number.isFinite(contentY) || !Number.isFinite(originY)
+                        || !Number.isFinite(contentHeight) || !Number.isFinite(height))
+                    return false
+                return contentY + height >= originY + contentHeight - _bottomSlack
+            }
+
+            function enableAutoScroll(reason) {
+                autoScroll = true
+                followScrollTimer.stop()
+                if (followScrollAnim.running)
+                    followScrollAnim.stop()
+                root.vlog("enableAutoScroll reason=" + reason)
             }
 
             function restoreInitialBottom(revision) {
@@ -517,11 +542,11 @@ Item {
                 initialRestoreSettledTimer.restart()
             }
 
-            function scheduleFollowScroll(animated) {
-                if (!autoScroll || !root.active)
+            function scheduleFollowScroll() {
+                if (!autoScroll || !root.active || initialBottomRestore)
                     return
-                pendingAnimatedFollow = pendingAnimatedFollow || animated
-                followScrollTimer.restart()
+                if (!followScrollTimer.running)
+                    followScrollTimer.start()
             }
 
             // a new row appeared → pin to bottom if auto (covers count changes
@@ -531,25 +556,30 @@ Item {
                     initialBottomRestore = true
                     restoreInitialBottom(initialRestoreRevision)
                 }
-                if (autoScroll && shouldFollowAssistant)
+                if (autoScroll || shouldKeepBottomPinned)
                     scheduleFollowScroll(false)
             }
             // Detect the user scrolling away from / back to the bottom.
             // positionViewAtEnd also fires this, but it lands at the bottom so
             // autoScroll stays true — no feedback loop.
             onContentYChanged: {
-                if (contentHeight <= 0) return
-                autoScroll = (contentY + height >= contentHeight - _bottomSlack)
+                if (!Number.isFinite(contentY) || !Number.isFinite(contentHeight)
+                        || !Number.isFinite(originY) || contentHeight <= 0
+                        || suppressAutoScrollTracking)
+                    return
+                autoScroll = atBottom()
             }
             onContentHeightChanged: {
                 if (initialBottomRestore) {
                     // contentHeight has already been updated by the completed
                     // Markdown layout. Pin cheaply here; forceLayout for every
                     // rich-text segment is what previously caused the hitching.
+                    suppressAutoScrollTracking = true
                     contentY = targetBottomY()
+                    suppressAutoScrollTracking = false
                     queueInitialBottomSettle(initialRestoreRevision)
                 }
-                if (autoScroll && shouldFollowAssistant)
+                if (autoScroll || shouldKeepBottomPinned)
                     scheduleFollowScroll(true)
             }
             Component.onCompleted: {
@@ -560,16 +590,45 @@ Item {
                 root.vlog("model changed hasActive=" + !!root.active)
                 root.requestInitialBottomAnchor()
             }
+
+            Connections {
+                target: root.active
+                ignoreUnknownSignals: true
+                function onStreamingChanged() {
+                    if (list.initialBottomRestore)
+                        return
+                    if (root.active && root.active.streaming) {
+                        list.enableAutoScroll("streaming")
+                        list.scheduleFollowScroll(false)
+                    }
+                }
+                function onRowsInserted() {
+                    if (list.initialBottomRestore)
+                        return
+                    if (list.autoScroll || list.shouldKeepBottomPinned)
+                        list.scheduleFollowScroll(false)
+                }
+                function onDataChanged() {
+                    if (list.initialBottomRestore)
+                        return
+                    if (list.autoScroll || list.shouldKeepBottomPinned)
+                        list.scheduleFollowScroll(true)
+                }
+            }
             onMovementStarted: {
                 if (moving) {
                     followScrollAnim.stop()
                     followScrollTimer.stop()
+                    if (flicking || dragging)
+                        autoScroll = false
                 }
             }
             onMovementEnded: {
                 if (contentHeight <= 0)
                     return
-                autoScroll = (contentY + height >= contentHeight - _bottomSlack)
+                autoScroll = atBottom()
+                if (autoScroll && shouldKeepBottomPinned)
+                    scheduleFollowScroll(false)
             }
 
             NumberAnimation {
@@ -578,34 +637,26 @@ Item {
                 property: "contentY"
                 duration: 110
                 easing.type: Easing.OutCubic
+                onStopped: list.suppressAutoScrollTracking = false
             }
 
             Timer {
                 id: followScrollTimer
-                interval: 24
+                interval: 32
                 repeat: false
                 running: false
 
                 onTriggered: {
-                    if (!list.autoScroll || !root.active) {
-                        list.pendingAnimatedFollow = false
+                    if (!list.autoScroll || !root.active || list.initialBottomRestore)
                         return
-                    }
                     const target = list.targetBottomY()
-                    const delta = target - list.contentY
-                    const animated = list.pendingAnimatedFollow
-                    list.pendingAnimatedFollow = false
-                    if (Math.abs(delta) < 2)
+                    if (!Number.isFinite(target) || !Number.isFinite(list.contentY))
                         return
-                    if (animated && delta > 0 && delta < 240) {
-                        followScrollAnim.stop()
-                        followScrollAnim.from = list.contentY
-                        followScrollAnim.to = target
-                        followScrollAnim.start()
-                    } else {
-                        followScrollAnim.stop()
-                        list.contentY = target
-                    }
+                    if (Math.abs(target - list.contentY) < 1)
+                        return
+                    list.suppressAutoScrollTracking = true
+                    list.contentY = target
+                    list.suppressAutoScrollTracking = false
                 }
             }
 
@@ -632,7 +683,7 @@ Item {
                 width: list.width
                 readonly property real estimatedHeight: root.estimatedRowHeight(rowData)
                 height: rowLoader.item
-                    ? (rowLoader.item.implicitHeight || rowLoader.item.height || 0)
+                    ? Math.max(0, rowLoader.item.implicitHeight)
                     : estimatedHeight
                 readonly property var rowData: model
                 readonly property int rowIndex: index
@@ -660,10 +711,11 @@ Item {
                     // bind Loader.active to y/height: that cycle is what caused
                     // the repeated QML binding-loop warnings and unstable tails.
                     active: true
-                    // Incubate every chat row asynchronously so rich history,
-                    // user images, and tool cards cannot monopolize the GUI frame
-                    // while the active assistant turn is receiving deltas.
-                    asynchronous: !(list.initialBottomRestore || list.waitingForInitialRows)
+                    // Keep chat row creation synchronous. Entering an
+                    // unrendered region while ListView is still incubating
+                    // delegates can leave the viewport briefly empty on Qt,
+                    // which shows up as white-screen flashing.
+                    asynchronous: false
                     onLoaded: {
                         if (!item)
                             return
@@ -1202,9 +1254,12 @@ Item {
                 id: bubble
                 anchors.right: parent.right
                 readonly property real maxTextWidth: Math.min(parent.width - theme.sp5, parent.width * 0.72)
+                readonly property real textBubbleWidth: Math.min(maxTextWidth,
+                                                                Math.max(userText.implicitWidth + theme.sp4 * 2,
+                                                                         72))
                 width: rowImages.length > 0
                     ? Math.min(parent.width - theme.sp5, 280)
-                    : maxTextWidth
+                    : textBubbleWidth
                 color: theme.userBubble
                 border.color: theme.userBubbleBorder
                 border.width: 1
@@ -1237,6 +1292,7 @@ Item {
                     }
 
                     TextEdit {
+                        id: userText
                         visible: rowData && rowData.text && rowData.text.length > 0
                         width: parent.width
                         text: (rowData && rowData.text) ? rowData.text : ""
@@ -1263,9 +1319,13 @@ Item {
             property var rowData
             property int rowIndex: -1
             readonly property string filtered: root.filterThink((rowData && rowData.text) ? rowData.text : "")
-            readonly property bool thinking: (rowData && rowData.text ? rowData.text.length : 0) > 0 && filtered.length === 0
-            readonly property bool hasRenderableText: filtered.length > 0
+            readonly property bool hasRawText: (rowData && rowData.text ? rowData.text.length : 0) > 0
+            readonly property bool thinking: hasRawText && filtered.length === 0
             readonly property bool isActiveStreamingRow: root.active && root.active.streaming && rowIndex === list.count - 1
+            readonly property bool shouldShowStreamingText: isActiveStreamingRow
+            readonly property bool hasRenderableText: filtered.length > 0
+            readonly property bool shouldShowMarkdown: hasRenderableText && !thinking && !isActiveStreamingRow
+            readonly property bool hasVisibleBody: shouldShowStreamingText || shouldShowMarkdown
             property bool hovering: false
             property bool actionBarHovered: false
             property bool actionBarPressed: false
@@ -1277,9 +1337,8 @@ Item {
                 markdownLoader.item.rawText = filtered
             }
             width: parent.width
-            implicitHeight: contentWrap.implicitHeight
-            opacity: hasRenderableText && !thinking ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: 200 } }
+            implicitHeight: hasVisibleBody ? contentWrap.implicitHeight : 0
+            opacity: hasVisibleBody ? 1 : 0
             Component.onCompleted: root.vlog("assistant row index=" + rowIndex
                                               + " rawLen=" + ((rowData && rowData.text) ? rowData.text.length : 0)
                                               + " filteredLen=" + filtered.length
@@ -1308,7 +1367,7 @@ Item {
 
             Row {
                 id: contentWrap
-                visible: parent.hasRenderableText && !parent.thinking
+                visible: parent.hasVisibleBody
                 width: parent.width
                 spacing: theme.sp2
 
@@ -1323,13 +1382,13 @@ Item {
 
                 Item {
                     width: Math.max(0, parent.width - avatar.width - parent.spacing)
-                    implicitHeight: assistantRow.isActiveStreamingRow
-                        ? streamingText.implicitHeight
-                        : (markdownLoader.item ? markdownLoader.item.implicitHeight : 0)
+                    implicitHeight: assistantRow.shouldShowMarkdown
+                        ? (markdownLoader.item ? markdownLoader.item.implicitHeight : 0)
+                        : Math.max(streamingText.implicitHeight, theme.sp4)
 
                     TextEdit {
                         id: streamingText
-                        visible: assistantRow.isActiveStreamingRow
+                        visible: !assistantRow.shouldShowMarkdown
                         width: parent.width
                         text: assistantRow.filtered
                         readOnly: true
@@ -1344,7 +1403,7 @@ Item {
 
                     Loader {
                         id: markdownLoader
-                        active: parent.width > 0 && assistantRow.hasRenderableText && !assistantRow.thinking && !assistantRow.isActiveStreamingRow
+                        active: parent.width > 0 && assistantRow.shouldShowMarkdown
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.top: parent.top
@@ -1370,7 +1429,7 @@ Item {
             Loader {
                 anchors.top: parent.top
                 anchors.right: parent.right
-                active: parent.hasRenderableText && !parent.thinking && (parent.hovering || parent.actionBarHovered || parent.actionBarPressed)
+                active: parent.hasVisibleBody && (parent.hovering || parent.actionBarHovered || parent.actionBarPressed)
                 sourceComponent: Item {
                     property var sourceRow: assistantRow
                     implicitWidth: actionRow.implicitWidth
