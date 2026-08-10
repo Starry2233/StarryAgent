@@ -15,8 +15,8 @@ Item {
     id: root
 
     property bool isDemo: false
-    property var active: frontendSessionStore.activeConversation   // frontend-facing active conversation
-    property var activeModel: frontendSessionStore.activeConversationModel
+    property var active: null   // frontend-facing active conversation
+    property var activeModel: null
     property var pendingImagePaths: []
     property bool imagePreviewVisible: false
     property string imagePreviewSource: ""

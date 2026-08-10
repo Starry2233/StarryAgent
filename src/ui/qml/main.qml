@@ -301,6 +301,8 @@ ApplicationWindow {
                 active: shell.destination === "chat"
                 sourceComponent: ChatView {
                     isDemo: demoMode
+                    active: frontendSessionStore.activeConversation
+                    activeModel: frontendSessionStore.activeConversationModel
                 }
             }
 

@@ -4,6 +4,7 @@
 #else
 #include <QApplication>
 #endif
+#include <QDir>
 #include <QEventLoop>
 #include <QFile>
 #include <QFont>
@@ -48,6 +49,8 @@
 #include "ui/ImageTransferService.h"
 #include "ui/MarkdownParser.h"
 #include "ui/FrontendSessionStore.h"
+#include "ui/BackendStore.h"
+#include "ipc/BackendProcessTransport.h"
 #include "ui/TrayController.h"
 #include "ui/ToastProxy.h"
 #include "ui/ToastService.h"
@@ -480,8 +483,10 @@ int main(int argc, char *argv[])
 
     const bool demoMode =
         argc > 1 && QString::fromLocal8Bit(argv[1]) == "--demo";
-    DebugTrace::verbose("app", QStringLiteral("demoMode=%1 logType=%2")
+    const bool splitMode = rawArgs.contains(QStringLiteral("--split"));
+    DebugTrace::verbose("app", QStringLiteral("demoMode=%1 splitMode=%2 logType=%3")
                                    .arg(demoMode)
+                                   .arg(splitMode)
                                    .arg(DebugTrace::logType()));
 
     ToolRegistry toolRegistry(&config, &settings);
@@ -492,7 +497,24 @@ int main(int argc, char *argv[])
     ConversationManager conversations(&config, &settings, &toolRegistry,
                                       !demoMode);
     FrontendSessionStore frontendSessionStore;
-    frontendSessionStore.setConversationManager(&conversations);
+    StarryAgent::BackendProcessTransport backendTransport;
+    StarryAgent::BackendStore backendStore;
+    if (splitMode)
+    {
+        backendStore.setTransport(&backendTransport);
+        backendTransport.setProgram(QCoreApplication::applicationFilePath());
+        backendTransport.setArguments({QStringLiteral("--backend")});
+        if (backendTransport.start())
+        {
+            backendStore.requestBootstrap();
+        }
+        else
+        {
+            qWarning() << "failed to start backend process, falling back to monolith";
+        }
+    }
+    if (!splitMode || !backendTransport.isRunning())
+        frontendSessionStore.setConversationManager(&conversations);
     ScheduledTaskManager scheduledTasks(&config, &settings, &conversations);
     conversations.setScheduledTaskManager(&scheduledTasks);
     toolRegistry.setScheduledTaskManager(&scheduledTasks);
@@ -590,8 +612,9 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("themeManager", &themeManager);
     engine.rootContext()->setContextProperty("skillInstallManager", &skillInstallManager);
     engine.rootContext()->setContextProperty("toolRegistry", &toolRegistry);
-    engine.rootContext()->setContextProperty("conversations", &conversations);
-    engine.rootContext()->setContextProperty("frontendSessionStore", &frontendSessionStore);
+    engine.rootContext()->setContextProperty("frontendSessionStore",
+                                             splitMode ? static_cast<QObject *>(&backendStore)
+                                                       : static_cast<QObject *>(&frontendSessionStore));
     engine.rootContext()->setContextProperty("scheduledTasks", &scheduledTasks);
     engine.rootContext()->setContextProperty("markdownParser", &markdownParser);
     engine.rootContext()->setContextProperty("clipboard", &clipboard);
