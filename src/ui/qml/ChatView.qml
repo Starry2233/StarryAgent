@@ -15,7 +15,7 @@ Item {
     id: root
 
     property bool isDemo: false
-    property var active: conversations.active   // the Conversation* (or null)
+    property var active: frontendSessionStore.activeConversation   // frontend-facing active conversation
     property var pendingImagePaths: []
     property bool imagePreviewVisible: false
     property string imagePreviewSource: ""
@@ -104,16 +104,16 @@ Item {
         if ((!text.trim() && pendingImagePaths.length === 0) || !root.active) return
         if (executeSlashCommand(text.trim())) {
             pendingImagePaths = []
-            conversations.saveActive()
+            frontendSessionStore.saveActiveConversation()
             return
         }
         if (list) {
             list.enableAutoScroll("send")
             list.scheduleFollowScroll(false)
         }
-        root.active.sendWithImages(text, pendingImagePaths)
+        frontendSessionStore.sendWithImages(text, pendingImagePaths)
         pendingImagePaths = []
-        conversations.saveActive()
+        frontendSessionStore.saveActiveConversation()
     }
 
     function selectedCommand() {
@@ -183,77 +183,77 @@ Item {
         const arg = text.length > command.length ? text.substring(command.length).trim() : ""
 
         if (command === "/help") {
-            root.active.appendAssistantText("/help\n/compact [instructions]\n/model [name]\n/plan [note|show|clear|open|ready|approve|reject|off]\n/workdir [path|reset]")
+            frontendSessionStore.appendAssistantText("/help\n/compact [instructions]\n/model [name]\n/plan [note|show|clear|open|ready|approve|reject|off]\n/workdir [path|reset]")
             return true
         }
         if (command === "/compact") {
-            root.active.appendAssistantText(root.active.compactNow(arg))
+            frontendSessionStore.appendAssistantText(frontendSessionStore.compactNow(arg))
             return true
         }
         if (command === "/model") {
             if (!arg || arg.length === 0) {
-                root.active.appendAssistantText(qsTr("Current model: %1\nAvailable models:\n%2")
+                frontendSessionStore.appendAssistantText(qsTr("Current model: %1\nAvailable models:\n%2")
                                                 .arg(settings.model, settings.models.join("\n")))
                 return true
             }
             settings.model = arg
-            root.active.appendAssistantText(qsTr("Switched model to %1").arg(settings.model))
+            frontendSessionStore.appendAssistantText(qsTr("Switched model to %1").arg(settings.model))
             return true
         }
         if (command === "/plan") {
             if (!arg || arg.length === 0) {
-                root.active.appendAssistantText(root.active.enterPlanMode())
+                frontendSessionStore.appendAssistantText(frontendSessionStore.enterPlanMode())
                 return true
             }
             if (arg === "ready") {
-                root.active.appendAssistantText(root.active.submitPlanForApproval())
+                frontendSessionStore.appendAssistantText(frontendSessionStore.submitPlanForApproval())
                 return true
             }
             if (arg === "approve") {
-                root.active.appendAssistantText(root.active.approvePlan())
+                frontendSessionStore.appendAssistantText(frontendSessionStore.approvePlan())
                 return true
             }
             if (arg === "reject") {
-                root.active.appendAssistantText(root.active.rejectPlan())
+                frontendSessionStore.appendAssistantText(frontendSessionStore.rejectPlan())
                 return true
             }
             if (arg.startsWith("reject ")) {
-                root.active.appendAssistantText(root.active.rejectPlan(arg.substring(7).trim()))
+                frontendSessionStore.appendAssistantText(frontendSessionStore.rejectPlan(arg.substring(7).trim()))
                 return true
             }
             if (arg === "off") {
-                root.active.appendAssistantText(root.active.exitPlanMode())
+                frontendSessionStore.appendAssistantText(frontendSessionStore.exitPlanMode())
                 return true
             }
             if (arg === "show") {
-                root.active.appendAssistantText(root.active.showPlan())
+                frontendSessionStore.appendAssistantText(frontendSessionStore.showPlan())
                 return true
             }
             if (arg === "clear") {
-                root.active.appendAssistantText(root.active.clearPlan())
+                frontendSessionStore.appendAssistantText(frontendSessionStore.clearPlan())
                 return true
             }
             if (arg === "open") {
-                root.active.appendAssistantText(root.active.openPlan())
+                frontendSessionStore.appendAssistantText(frontendSessionStore.openPlan())
                 return true
             }
-            root.active.appendAssistantText(root.active.enterPlanMode(arg))
+            frontendSessionStore.appendAssistantText(frontendSessionStore.enterPlanMode(arg))
             return true
         }
         if (command === "/workdir") {
             if (!arg || arg.length === 0) {
-                root.active.appendAssistantText(root.active.showWorkdir())
+                frontendSessionStore.appendAssistantText(frontendSessionStore.showWorkdir())
                 return true
             }
             if (arg === "reset") {
-                root.active.appendAssistantText(root.active.resetWorkdir())
+                frontendSessionStore.appendAssistantText(frontendSessionStore.resetWorkdir())
                 return true
             }
-            root.active.appendAssistantText(root.active.setWorkdir(arg))
+            frontendSessionStore.appendAssistantText(frontendSessionStore.setWorkdir(arg))
             return true
         }
 
-        root.active.appendAssistantText(qsTr("Unknown command: %1").arg(command))
+        frontendSessionStore.appendAssistantText(qsTr("Unknown command: %1").arg(command))
         return true
     }
 
@@ -368,7 +368,7 @@ Item {
         vlog("completed demo=" + root.isDemo + " hasActive=" + !!root.active)
         if (root.isDemo) {
             // seed a fake user turn for the scripted assistant reply
-            if (root.active) root.active.appendUser("Write a test file for me.")
+            if (root.active) frontendSessionStore.appendUser("Write a test file for me.")
         }
     }
 
@@ -394,7 +394,7 @@ Item {
             onCaptured: function(path) {
                 if (!root.active || !path || path.length === 0)
                     return
-                const imported = root.active.importImage(path)
+                const imported = frontendSessionStore.importImage(path)
                 if (imported && imported.length > 0)
                     root.addPendingImage(imported)
             }
@@ -406,7 +406,7 @@ Item {
         function onCaptured(path) {
             if (!root.active || !path || path.length === 0)
                 return
-            const imported = root.active.importImage(path)
+            const imported = frontendSessionStore.importImage(path)
             if (imported && imported.length > 0)
                 root.addPendingImage(imported)
         }
@@ -426,7 +426,7 @@ Item {
             if (!root.active || !paths)
                 return
             for (let i = 0; i < paths.length && root.pendingImagePaths.length < 5; ++i) {
-                const imported = root.active.importImage(paths[i])
+                const imported = frontendSessionStore.importImage(paths[i])
                 if (imported && imported.length > 0)
                     root.addPendingImage(imported)
             }
@@ -1100,7 +1100,7 @@ Item {
                                     if (!picked || picked.length === 0)
                                         return
                                     for (let i = 0; i < picked.length && root.pendingImagePaths.length < 5; ++i) {
-                                        const imported = root.active.importImage(picked[i])
+                                        const imported = frontendSessionStore.importImage(picked[i])
                                         if (imported && imported.length > 0)
                                             root.addPendingImage(imported)
                                     }
@@ -1604,8 +1604,8 @@ Item {
                 status: rowData ? rowData.status : "composing"
                 result: rowData ? rowData.result : ""
                 needsApproval: rowData ? rowData.needsApproval : true
-                onApprove: if (root.active && rowData) root.active.dispatch(rowData.toolCallId, rowData.toolName, rowData.argsText)
-                onDeny: if (root.active && rowData) root.active.denyTool(rowData.toolCallId)
+                onApprove: if (root.active && rowData) frontendSessionStore.dispatch(rowData.toolCallId, rowData.toolName, rowData.argsText)
+                onDeny: if (root.active && rowData) frontendSessionStore.denyTool(rowData.toolCallId)
             }
         }
     }

@@ -47,6 +47,7 @@
 #include "ui/FilePicker.h"
 #include "ui/ImageTransferService.h"
 #include "ui/MarkdownParser.h"
+#include "ui/FrontendSessionStore.h"
 #include "ui/TrayController.h"
 #include "ui/ToastProxy.h"
 #include "ui/ToastService.h"
@@ -490,6 +491,8 @@ int main(int argc, char *argv[])
     // injects the shared Settings + ToolRegistry into each conversation.
     ConversationManager conversations(&config, &settings, &toolRegistry,
                                       !demoMode);
+    FrontendSessionStore frontendSessionStore;
+    frontendSessionStore.setConversationManager(&conversations);
     ScheduledTaskManager scheduledTasks(&config, &settings, &conversations);
     conversations.setScheduledTaskManager(&scheduledTasks);
     toolRegistry.setScheduledTaskManager(&scheduledTasks);
@@ -588,6 +591,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("skillInstallManager", &skillInstallManager);
     engine.rootContext()->setContextProperty("toolRegistry", &toolRegistry);
     engine.rootContext()->setContextProperty("conversations", &conversations);
+    engine.rootContext()->setContextProperty("frontendSessionStore", &frontendSessionStore);
     engine.rootContext()->setContextProperty("scheduledTasks", &scheduledTasks);
     engine.rootContext()->setContextProperty("markdownParser", &markdownParser);
     engine.rootContext()->setContextProperty("clipboard", &clipboard);

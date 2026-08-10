@@ -48,7 +48,7 @@ Item {
         onConfirmed: if (root.targetConv) {
             const c = root.targetConv
             root.targetConv = null
-            conversations.remove(c)
+            frontendSessionStore.removeConversation(c)
         }
     }
     PropertiesDialog {
@@ -100,7 +100,7 @@ Item {
                 background: Rectangle { color: parent.down ? theme.clayDeep : theme.clay; radius: theme.rPill; implicitWidth: 64; implicitHeight: 32 }
                 onClicked: {
                     mConfirm.visible2 = false
-                    if (root.targetConv) { const c = root.targetConv; root.targetConv = null; conversations.remove(c) }
+                    if (root.targetConv) { const c = root.targetConv; root.targetConv = null; frontendSessionStore.removeConversation(c) }
                 }
             }
         }
@@ -179,13 +179,9 @@ Item {
         const t = root.editingText.trim()
         root.editingText = ""
         if (t.length === 0) return
-        const list = conversations.conversations
-        for (let i = 0; i < list.length; i++) {
-            if (list[i].id === convId) {
-                conversations.rename(list[i], t)
-                break
-            }
-        }
+        const conv = frontendSessionStore.conversationById(convId)
+        if (conv)
+            frontendSessionStore.renameConversation(conv, t)
     }
 
     // Flat mirror of conversations.conversations with a derived `bucket` role
@@ -222,15 +218,17 @@ Item {
 
     function rebuild() {
         const nextRows = []
-        const list = conversations.conversations
-        for (let i = 0; i < list.length; i++) {
-            const c = list[i]
+        const list = frontendSessionStore
+        for (let i = 0; i < list.count; i++) {
+            const c = list.conversationAt(i)
+            if (!c)
+                continue
             nextRows.push({
                 convId: c.id,
                 title: c.title,
                 bucket: bucketOf(c.updated),
                 rel: relTime(c.updated),
-                active: conversations.active && conversations.active.id === c.id
+                active: frontendSessionStore.activeConversation && frontendSessionStore.activeConversation.id === c.id
             })
         }
         rowsData = nextRows
@@ -238,9 +236,9 @@ Item {
 
     Component.onCompleted: rebuild()
     Connections {
-        target: conversations
-        function onConversationsChanged() { rebuild() }
-        function onActiveChanged() { rebuild() }
+        target: frontendSessionStore
+        function onSessionsChanged() { rebuild() }
+        function onActiveConversationChanged() { rebuild() }
     }
 
     // surface
@@ -373,8 +371,8 @@ Item {
                     // current destination — NOT while settings is showing,
                     // so the gear and a conversation never highlight together.
                     property bool isActive: !root.settingsActive
-                        && conversations.active
-                        && conversations.active.id === row.convId
+                        && frontendSessionStore.activeConversation
+                        && frontendSessionStore.activeConversation.id === row.convId
                     width: parent ? parent.width : 0
                     height: 44
                     radius: theme.rSm
@@ -397,7 +395,7 @@ Item {
                         onPressAndHold: (mouse) => {
                             held = true
                             if (root.editingId !== "") { root.commitRename(); return }
-                            const c = conversations.conversations[index]
+                            const c = frontendSessionStore.conversationAt(index)
                             if (!c) return
                             root.targetConv = c
                             root.openConversationMenu(rowMa, mouse.x, mouse.y)
@@ -410,14 +408,14 @@ Item {
                                 root.commitRename()
                                 return
                             }
-                            const c = conversations.conversations[index]
+                            const c = frontendSessionStore.conversationAt(index)
                             if (!c) return
                             if (mouse.button === Qt.RightButton) {
                                 root.targetConv = c
                                 root.openConversationMenu(rowMa, mouse.x, mouse.y)
                             } else {
                                 root.requestOpenConversation()
-                                conversations.active = c
+                                frontendSessionStore.setActiveConversation(c)
                             }
                         }
                     }

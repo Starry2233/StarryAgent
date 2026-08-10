@@ -21,7 +21,7 @@ ApplicationWindow {
             return true
         return shell.drawerOpen
                 || shell.destination === "settings"
-                || (shell.destination === "picker" && conversations.active)
+                || (shell.destination === "picker" && frontendSessionStore.activeConversation)
     }
 
     function handleAndroidBack() {
@@ -37,7 +37,7 @@ ApplicationWindow {
             shell._navOverride = null
             return true
         }
-        if (shell.destination === "picker" && conversations.active) {
+        if (shell.destination === "picker" && frontendSessionStore.activeConversation) {
             shell._navOverride = null
             return true
         }
@@ -270,15 +270,15 @@ ApplicationWindow {
         // mutually exclusive: picker | chat | settings.
         property var _navOverride: null
         property string destination: _navOverride !== null ? _navOverride
-                                           : (conversations.active ? "chat" : "picker")
+                                           : (frontendSessionStore.activeConversation ? "chat" : "picker")
 
         // Whenever a conversation becomes active (sidebar row click or
         // new-conv pick), drop the override so the right pane follows it.
         // On narrow viewports, also close the drawer — the user picked one.
         Connections {
-            target: conversations
-            function onActiveChanged() {
-                if (conversations.active) {
+            target: frontendSessionStore
+            function onActiveConversationChanged() {
+                if (frontendSessionStore.activeConversation) {
                     shell._navOverride = null
                     if (shell.isNarrow) shell.drawerOpen = false
                 }
@@ -309,7 +309,7 @@ ApplicationWindow {
                 active: shell.destination === "picker"
                 sourceComponent: ModePicker {
                     onPicked: (modeId) => {
-                        conversations.newConversation(modeId)
+                        frontendSessionStore.openNewConversation(modeId)
                         shell._navOverride = null   // active now set -> binding drives "chat"
                     }
                 }
