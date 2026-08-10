@@ -25,6 +25,8 @@ class Settings;
 //
 // Each Conversation owns its own OpenAIClient so multiple conversations can
 // stream in parallel without signal cross-talk or a shared in-flight guard.
+class ConversationRuntime;
+
 class Conversation : public QAbstractListModel
 {
     Q_OBJECT
@@ -180,7 +182,23 @@ class Conversation : public QAbstractListModel
                                const QString &summary);
 
   private:
-    QJsonArray buildMessagesFromRow(int startRow) const;
+    struct BuildMessagesContext
+    {
+        QString workdir;
+        QString compactSummary;
+        int compactUntilRow = 0;
+        bool planMode = false;
+        QString planText;
+        bool planAwaitingApproval = false;
+        QString scheduledTaskId;
+        QString scheduledInstruction;
+    };
+
+    class ConversationRuntime;
+
+    QJsonArray buildMessagesFromRow(int startRow,
+                                    const BuildMessagesContext &context) const;
+    BuildMessagesContext buildMessagesContext() const;
     int firstLiveRow() const;
     int estimatedRequestTokens(const QString &pendingText = {},
                                const QStringList &pendingImages = {}) const;
@@ -198,6 +216,9 @@ class Conversation : public QAbstractListModel
     void appendRow(const Item &it);
     void updateRow(int i, const Item &it);
     void setError(const QString &msg);
+    void syncClientSettings();
+    void resendAfterToolResolution();
+    void updatePlanTextFromLatestAssistant();
 
     // Lazily create + configure the per-conversation OpenAIClient and wire its
     // signals to this conversation's internal handlers.
@@ -239,6 +260,7 @@ class Conversation : public QAbstractListModel
 
     Settings *m_settings = nullptr;
     ToolRegistry *m_registry = nullptr;
+    ConversationRuntime *m_runtime = nullptr;
     OpenAIClient *m_client = nullptr;
     bool m_pendingResend =
         false; // tool finished before the stream's finished() — defer resend

@@ -89,6 +89,328 @@ bool isToolBlockedInPlanMode(const QString &toolName, const QString &argsText)
 }
 } // namespace
 
+class Conversation::ConversationRuntime
+{
+  public:
+    explicit ConversationRuntime(Conversation *owner) : m_owner(owner) {}
+
+    Conversation::BuildMessagesContext buildMessagesContext() const
+    {
+        Conversation::BuildMessagesContext context;
+        context.workdir = m_owner->m_workdir;
+        context.compactSummary = m_owner->m_compactSummary;
+        context.compactUntilRow = m_owner->m_compactUntilRow;
+        context.planMode = m_owner->m_planMode;
+        context.planText = m_owner->m_planText;
+        context.planAwaitingApproval = m_owner->m_planAwaitingApproval;
+        context.scheduledTaskId = m_owner->m_scheduledTaskId;
+        context.scheduledInstruction = m_owner->m_scheduledInstruction;
+        return context;
+    }
+
+    void ensureClient()
+    {
+        if (m_owner->m_client)
+            return;
+        DebugTrace::verbose(
+            "conversation",
+            QStringLiteral("ensureClient id=%1 create client").arg(m_owner->m_id));
+        m_owner->m_client = new OpenAIClient(m_owner);
+        m_owner->syncClientSettings();
+        connect(m_owner->m_client, &OpenAIClient::contentDelta, m_owner,
+                &Conversation::onClientDelta);
+        connect(m_owner->m_client, &OpenAIClient::reasoningDelta, m_owner,
+                &Conversation::onClientReasoningDelta);
+        connect(m_owner->m_client, &OpenAIClient::toolCallComposing, m_owner,
+                &Conversation::onClientComposing);
+        connect(m_owner->m_client, &OpenAIClient::toolCallName, m_owner,
+                &Conversation::onClientToolName);
+        connect(m_owner->m_client, &OpenAIClient::toolCallReady, m_owner,
+                &Conversation::onClientReady);
+        connect(m_owner->m_client, &OpenAIClient::finished, m_owner,
+                &Conversation::onClientFinished);
+        connect(m_owner->m_client, &OpenAIClient::error, m_owner,
+                &Conversation::onClientError);
+        connect(m_owner->m_registry, &ToolRegistry::toolFinished, m_owner,
+                &Conversation::onToolFinished);
+    }
+
+    void startUserTurn(const QString &text, const QStringList &imagePaths)
+    {
+        if ((text.trimmed().isEmpty() && imagePaths.isEmpty()) ||
+            !m_owner->m_settings || !m_owner->m_registry)
+            return;
+        DebugTrace::verbose(
+            "conversation",
+            QStringLiteral(
+                "sendWithImages id=%1 textLen=%2 images=%3 model=%4 streaming=%5")
+                .arg(m_owner->m_id)
+                .arg(text.size())
+                .arg(imagePaths.size())
+                .arg(m_owner->m_settings ? m_owner->m_settings->model() : QString())
+                .arg(m_owner->m_settings && m_owner->m_settings->streaming()));
+        m_owner->appendUserWithImages(text, imagePaths);
+        m_owner->maybeAutoCompact({}, {}, true);
+        m_owner->appendAssistant();
+        ensureClient();
+        m_owner->syncClientSettings();
+        m_owner->m_compactRetryAttempted = false;
+        m_owner->m_clientFinished = false;
+        m_owner->setError(QString());
+        m_owner->m_client->send(
+            m_owner->buildMessages(),
+            m_owner->m_registry->openaiToolsArray(
+                m_owner->schedulingToolsAvailableForCurrentTurn()));
+    }
+
+    void startScheduledTask(const QString &taskId, const QString &instruction)
+    {
+        if (taskId.isEmpty() || instruction.trimmed().isEmpty() ||
+            m_owner->m_streaming || !m_owner->m_settings || !m_owner->m_registry)
+            return;
+        m_owner->m_scheduledTaskId = taskId;
+        m_owner->m_scheduledInstruction = instruction.trimmed();
+        m_owner->maybeAutoCompact();
+        m_owner->appendAssistant();
+        ensureClient();
+        m_owner->syncClientSettings();
+        m_owner->m_clientFinished = false;
+        m_owner->setError(QString());
+        m_owner->m_client->send(
+            m_owner->buildMessages(),
+            m_owner->m_registry->openaiToolsArray(
+                m_owner->schedulingToolsAvailableForCurrentTurn()));
+    }
+
+    void dispatchTool(const QString &toolCallId, const QString &name,
+                      const QString &argsText)
+    {
+        DebugTrace::verbose(
+            "conversation",
+            QStringLiteral("dispatch id=%1 toolCallId=%2 name=%3 argsLen=%4")
+                .arg(m_owner->m_id, toolCallId, name)
+                .arg(argsText.size()));
+        if (m_owner->m_planMode && isToolBlockedInPlanMode(name, argsText))
+        {
+            const QString message =
+                QStringLiteral(
+                    "Error: tool `%1` is unavailable in plan mode. Stay in "
+                    "exploration/planning, "
+                    "or exit plan mode before implementation.")
+                    .arg(name);
+            DebugTrace::verbose(
+                "conversation",
+                QStringLiteral("dispatch blocked by plan mode id=%1 tool=%2")
+                    .arg(m_owner->m_id, name));
+            m_owner->setToolError(toolCallId, message);
+            const int i = m_owner->indexOfTool(toolCallId);
+            if (i >= 0)
+                m_owner->maybeContinueAfterToolResolution(i);
+            return;
+        }
+        m_owner->setToolRunning(toolCallId);
+        const QJsonObject argsObj =
+            argsText.isEmpty()
+                ? QJsonObject()
+                : QJsonDocument::fromJson(argsText.toUtf8()).object();
+        m_owner->m_registry->dispatch(m_owner->m_id, toolCallId, name, argsObj,
+                                      m_owner->m_workdir);
+    }
+
+    void denyTool(const QString &toolCallId)
+    {
+        m_owner->setToolDenied(toolCallId);
+        const int i = m_owner->indexOfTool(toolCallId);
+        if (i >= 0)
+            continueAfterToolResolution(i);
+    }
+
+    void onClientReady(const QString &id, const QString &name,
+                       const QJsonObject &args)
+    {
+        m_owner->flushPendingAssistantDeltas();
+        const QString argsStr = QString::fromUtf8(
+            QJsonDocument(args).toJson(QJsonDocument::Indented));
+        const bool scheduledExecution = !m_owner->m_scheduledTaskId.isEmpty();
+        const bool needs = scheduledExecution
+                               ? false
+                               : m_owner->m_registry->permissionRequired(name);
+        DebugTrace::verbose(
+            "conversation",
+            QStringLiteral("onClientReady id=%1 toolCallId=%2 "
+                           "name=%3 needsApproval=%4 scheduled=%5 "
+                           "argsKeys=%6")
+                .arg(m_owner->m_id, id, name)
+                .arg(needs)
+                .arg(scheduledExecution)
+                .arg(args.keys().join(',')));
+        m_owner->setToolReady(id, name, argsStr, needs);
+        if (scheduledExecution || m_owner->m_settings->bypassPermissions() ||
+            !needs)
+            dispatchTool(id, name, argsStr);
+        else
+            m_owner->m_clientFinished = true;
+    }
+
+    void onClientFinished()
+    {
+        m_owner->flushPendingAssistantDeltas();
+        DebugTrace::verbose(
+            "conversation",
+            QStringLiteral("onClientFinished id=%1 pendingResend=%2")
+                .arg(m_owner->m_id)
+                .arg(m_owner->m_pendingResend));
+        m_owner->m_clientFinished = true;
+        for (int i = int(m_owner->m_items.size()) - 1; i >= 0; --i)
+        {
+            if (m_owner->m_items[i].kind == QStringLiteral("tool"))
+                continue;
+            if (m_owner->m_items[i].kind == QStringLiteral("assistant") &&
+                !m_owner->m_items[i].complete)
+            {
+                Conversation::Item it = m_owner->m_items[i];
+                it.complete = true;
+                m_owner->updateRow(i, it);
+            }
+            break;
+        }
+        m_owner->setStreaming(false);
+        if (m_owner->m_pendingResend)
+        {
+            m_owner->m_pendingResend = false;
+            m_owner->setStreaming(true);
+            m_owner->resendAfterToolResolution();
+        }
+        m_owner->updatePlanTextFromLatestAssistant();
+        if (!m_owner->m_scheduledTaskId.isEmpty() && !m_owner->m_pendingResend &&
+            !m_owner->hasUnresolvedToolCalls())
+            finishScheduledTask(true);
+    }
+
+    void onClientError(const QString &msg)
+    {
+        m_owner->flushPendingAssistantDeltas();
+        DebugTrace::verbose(
+            "conversation",
+            QStringLiteral("onClientError id=%1 len=%2")
+                .arg(m_owner->m_id)
+                .arg(msg.size()));
+        m_owner->m_clientFinished = true;
+        const QString lower = msg.toLower();
+        const bool contextExceeded =
+            lower.contains(QStringLiteral("context_length_exceeded")) ||
+            lower.contains(QStringLiteral("context window")) ||
+            lower.contains(QStringLiteral("input exceeds the context")) ||
+            lower.contains(QStringLiteral("prompt too long"));
+        if (contextExceeded && !m_owner->m_compactRetryAttempted &&
+            m_owner->m_settings && m_owner->m_settings->compact())
+        {
+            DebugTrace::verbose(
+                "compact",
+                QStringLiteral("fallback retry id=%1 reason=context-exceeded")
+                    .arg(m_owner->m_id));
+            m_owner->m_compactRetryAttempted = true;
+            m_owner->setStreaming(true);
+            if (m_owner->maybeAutoCompact({}, {}, true))
+            {
+                m_owner->setError(QString());
+                m_owner->syncClientSettings();
+                m_owner->m_client->send(
+                    m_owner->buildMessages(),
+                    m_owner->m_registry->openaiToolsArray(
+                        m_owner->schedulingToolsAvailableForCurrentTurn()));
+                return;
+            }
+            m_owner->setStreaming(false);
+        }
+        for (int i = int(m_owner->m_items.size()) - 1; i >= 0; --i)
+        {
+            if (m_owner->m_items[i].kind == QStringLiteral("tool"))
+                continue;
+            if (m_owner->m_items[i].kind == QStringLiteral("assistant") &&
+                !m_owner->m_items[i].complete)
+            {
+                m_owner->beginRemoveRows(QModelIndex(), i, i);
+                m_owner->m_items.removeAt(i);
+                m_owner->endRemoveRows();
+                m_owner->touch();
+            }
+            break;
+        }
+        m_owner->setStreaming(false);
+        m_owner->setError(msg);
+        if (!m_owner->m_scheduledTaskId.isEmpty())
+            finishScheduledTask(false);
+    }
+
+    void onToolFinished(const QString &ownerId, const QString &id,
+                        const QString &result)
+    {
+        if (ownerId != m_owner->m_id)
+            return;
+        const int toolIndex = m_owner->indexOfTool(id);
+        if (toolIndex < 0)
+            return;
+        DebugTrace::verbose(
+            "conversation",
+            QStringLiteral("onToolFinished id=%1 toolCallId=%2 resultLen=%3")
+                .arg(m_owner->m_id, id)
+                .arg(result.size()));
+        m_owner->setToolDone(id, result);
+        continueAfterToolResolution(toolIndex);
+    }
+
+    void continueAfterToolResolution(int toolIndex)
+    {
+        if (!m_owner->toolGroupReadyToContinue(toolIndex))
+            return;
+
+        DebugTrace::verbose(
+            "conversation",
+            QStringLiteral("maybeContinueAfterToolResolution id=%1 "
+                           "toolIndex=%2 prevStreaming=%3")
+                .arg(m_owner->m_id)
+                .arg(toolIndex)
+                .arg(m_owner->m_streaming));
+        const bool prevStreaming = m_owner->m_streaming;
+        m_owner->appendAssistant();
+        if (prevStreaming || !m_owner->m_clientFinished)
+            m_owner->m_pendingResend = true;
+        else
+            m_owner->resendAfterToolResolution();
+        m_owner->updatePlanTextFromLatestAssistant();
+    }
+
+    void finishScheduledTask(bool success)
+    {
+        const QString id = m_owner->m_scheduledTaskId;
+        if (id.isEmpty())
+            return;
+        QString summary = m_owner->m_error;
+        if (summary.isEmpty())
+        {
+            for (int i = int(m_owner->m_items.size()) - 1; i >= 0; --i)
+            {
+                if (m_owner->m_items[i].kind == QStringLiteral("assistant") &&
+                    !m_owner->m_items[i].text.trimmed().isEmpty())
+                {
+                    summary = m_owner->m_items[i].text.trimmed();
+                    break;
+                }
+            }
+        }
+        if (summary.isEmpty())
+            summary = success ? QStringLiteral("Task completed.")
+                              : QStringLiteral("Task failed.");
+        m_owner->m_scheduledTaskId.clear();
+        m_owner->m_scheduledInstruction.clear();
+        emit m_owner->scheduledTaskFinished(id, success, summary);
+    }
+
+  private:
+    Conversation *m_owner = nullptr;
+};
+
 Conversation::Conversation(Modes::Mode mode, QString indexMd, QString skillsMd,
                            QObject *parent)
     : QAbstractListModel(parent),
@@ -97,6 +419,7 @@ Conversation::Conversation(Modes::Mode mode, QString indexMd, QString skillsMd,
       m_indexMd(std::move(indexMd)), m_skillsMd(std::move(skillsMd)),
       m_created(QDateTime::currentDateTime()), m_updated(m_created)
 {
+    m_runtime = new ConversationRuntime(this);
 }
 
 int Conversation::rowCount(const QModelIndex &parent) const
@@ -414,7 +737,7 @@ void Conversation::setToolError(const QString &toolCallId,
 
 QJsonArray Conversation::buildMessages() const
 {
-    return buildMessagesFromRow(firstLiveRow());
+    return buildMessagesFromRow(firstLiveRow(), buildMessagesContext());
 }
 
 bool Conversation::schedulingToolsAvailableForCurrentTurn() const
@@ -424,12 +747,27 @@ bool Conversation::schedulingToolsAvailableForCurrentTurn() const
     return m_mode != Modes::Mode::Coding;
 }
 
-int Conversation::firstLiveRow() const
+Conversation::BuildMessagesContext Conversation::buildMessagesContext() const
 {
-    return qBound(0, m_compactUntilRow, int(m_items.size()));
+    return m_runtime ? m_runtime->buildMessagesContext()
+                     : BuildMessagesContext{m_workdir,
+                                            m_compactSummary,
+                                            m_compactUntilRow,
+                                            m_planMode,
+                                            m_planText,
+                                            m_planAwaitingApproval,
+                                            m_scheduledTaskId,
+                                            m_scheduledInstruction};
 }
 
-QJsonArray Conversation::buildMessagesFromRow(int startRow) const
+int Conversation::firstLiveRow() const
+{
+    const BuildMessagesContext context = buildMessagesContext();
+    return qBound(0, context.compactUntilRow, int(m_items.size()));
+}
+
+QJsonArray Conversation::buildMessagesFromRow(
+    int startRow, const BuildMessagesContext &context) const
 {
     // Prepend the system prompt.
     QJsonArray out;
@@ -442,16 +780,16 @@ QJsonArray Conversation::buildMessagesFromRow(int startRow) const
                         "Current local timezone: %2\n")
                         .arg(now.toString(Qt::ISODate),
                              QString::fromUtf8(now.timeZone().id()));
-    if (!m_workdir.trimmed().isEmpty())
+    if (!context.workdir.trimmed().isEmpty())
     {
         systemPrompt +=
             QStringLiteral("\n\nCurrent conversation working directory: %1\n"
                            "Treat this as the default base directory for "
                            "relative paths and "
                            "shell commands unless the user says otherwise.\n")
-                .arg(m_workdir);
+                .arg(context.workdir);
     }
-    if (m_planMode)
+    if (context.planMode)
     {
         systemPrompt += QStringLiteral(
             "\n\n--- Plan Mode ---\n"
@@ -467,7 +805,7 @@ QJsonArray Conversation::buildMessagesFromRow(int startRow) const
             "not "
             "implement until the user explicitly approves leaving plan "
             "mode.\n");
-        if (m_planAwaitingApproval)
+        if (context.planAwaitingApproval)
         {
             systemPrompt +=
                 QStringLiteral("\nThe current plan has been submitted "
@@ -475,14 +813,14 @@ QJsonArray Conversation::buildMessagesFromRow(int startRow) const
                                "Wait for approval, or revise the plan "
                                "only if the user asks for changes.\n");
         }
-        if (!m_planText.trimmed().isEmpty())
+        if (!context.planText.trimmed().isEmpty())
             systemPrompt += QStringLiteral("\nCurrent saved plan:\n%1\n")
-                                .arg(m_planText.trimmed());
+                                .arg(context.planText.trimmed());
     }
     sys.insert("content", systemPrompt);
     out.append(sys);
     QString scheduledAnchorContent;
-    if (!m_scheduledInstruction.isEmpty())
+    if (!context.scheduledInstruction.isEmpty())
     {
         QJsonObject scheduled;
         scheduled.insert("role", "system");
@@ -520,7 +858,7 @@ QJsonArray Conversation::buildMessagesFromRow(int startRow) const
                 "authoritative current time for this run, and explicitly take "
                 "that current time into account if the task depends on timing "
                 "or schedule context.\n\nTask being executed right now:\n%1")
-                .arg(m_scheduledInstruction));
+                .arg(context.scheduledInstruction));
         out.append(scheduled);
 
         scheduledAnchorContent = QStringLiteral(
@@ -538,13 +876,13 @@ QJsonArray Conversation::buildMessagesFromRow(int startRow) const
             "Treat the trigger as already happened, execute the task below, "
             "and reply only with the concrete execution result for this "
             "run.\n\nUser task to execute right now:\n%1")
-                                     .arg(m_scheduledInstruction);
+                                     .arg(context.scheduledInstruction);
     }
-    if (!m_compactSummary.trimmed().isEmpty())
+    if (!context.compactSummary.trimmed().isEmpty())
     {
         QJsonObject compactMessage;
         compactMessage.insert("role", "user");
-        compactMessage.insert("content", m_compactSummary);
+        compactMessage.insert("content", context.compactSummary);
         out.append(compactMessage);
     }
 
@@ -828,33 +1166,8 @@ void Conversation::setDefaultWorkdir(QString workdir)
 
 void Conversation::ensureClient()
 {
-    if (m_client)
-        return;
-    DebugTrace::verbose(
-        "conversation",
-        QStringLiteral("ensureClient id=%1 create client").arg(m_id));
-    m_client = new OpenAIClient(this);
-    m_client->setBaseUrl(m_settings->apiBaseUrl());
-    m_client->setApiKey(m_settings->apiKey());
-    m_client->setModel(m_settings->model());
-    m_client->setStreaming(m_settings->streaming());
-    connect(m_client, &OpenAIClient::contentDelta, this,
-            &Conversation::onClientDelta);
-    connect(m_client, &OpenAIClient::reasoningDelta, this,
-            &Conversation::onClientReasoningDelta);
-    connect(m_client, &OpenAIClient::toolCallComposing, this,
-            &Conversation::onClientComposing);
-    connect(m_client, &OpenAIClient::toolCallName, this,
-            &Conversation::onClientToolName);
-    connect(m_client, &OpenAIClient::toolCallReady, this,
-            &Conversation::onClientReady);
-    connect(m_client, &OpenAIClient::finished, this,
-            &Conversation::onClientFinished);
-    connect(m_client, &OpenAIClient::error, this, &Conversation::onClientError);
-    // Tool results come from the shared ToolRegistry; filter by toolCallId so
-    // only the conversation that dispatched the call processes the result.
-    connect(m_registry, &ToolRegistry::toolFinished, this,
-            &Conversation::onToolFinished);
+    if (m_runtime)
+        m_runtime->ensureClient();
 }
 
 void Conversation::send(const QString &text) { sendWithImages(text, {}); }
@@ -862,56 +1175,15 @@ void Conversation::send(const QString &text) { sendWithImages(text, {}); }
 void Conversation::sendWithImages(const QString &text,
                                   const QStringList &imagePaths)
 {
-    if ((text.trimmed().isEmpty() && imagePaths.isEmpty()) || !m_settings ||
-        !m_registry)
-        return;
-    DebugTrace::verbose(
-        "conversation",
-        QStringLiteral(
-            "sendWithImages id=%1 textLen=%2 images=%3 model=%4 streaming=%5")
-            .arg(m_id)
-            .arg(text.size())
-            .arg(imagePaths.size())
-            .arg(m_settings ? m_settings->model() : QString())
-            .arg(m_settings && m_settings->streaming()));
-    appendUserWithImages(text, imagePaths);
-    maybeAutoCompact({}, {}, true);
-    appendAssistant();
-    ensureClient();
-    // Re-sync config each turn so settings changes (key/model/endpoint) are
-    // picked up without restarting.
-    m_client->setBaseUrl(m_settings->apiBaseUrl());
-    m_client->setApiKey(m_settings->apiKey());
-    m_client->setModel(m_settings->model());
-    m_client->setStreaming(m_settings->streaming());
-    m_compactRetryAttempted = false;
-    m_clientFinished = false;
-    setError(QString());
-    m_client->send(buildMessages(),
-                   m_registry->openaiToolsArray(
-                       schedulingToolsAvailableForCurrentTurn()));
+    if (m_runtime)
+        m_runtime->startUserTurn(text, imagePaths);
 }
 
 void Conversation::runScheduledTask(const QString &taskId,
                                     const QString &instruction)
 {
-    if (taskId.isEmpty() || instruction.trimmed().isEmpty() || m_streaming ||
-        !m_settings || !m_registry)
-        return;
-    m_scheduledTaskId = taskId;
-    m_scheduledInstruction = instruction.trimmed();
-    maybeAutoCompact();
-    appendAssistant();
-    ensureClient();
-    m_client->setBaseUrl(m_settings->apiBaseUrl());
-    m_client->setApiKey(m_settings->apiKey());
-    m_client->setModel(m_settings->model());
-    m_client->setStreaming(m_settings->streaming());
-    m_clientFinished = false;
-    setError(QString());
-    m_client->send(buildMessages(),
-                   m_registry->openaiToolsArray(
-                       schedulingToolsAvailableForCurrentTurn()));
+    if (m_runtime)
+        m_runtime->startScheduledTask(taskId, instruction);
 }
 
 QString Conversation::importImage(const QString &sourcePath)
@@ -954,43 +1226,14 @@ QString Conversation::importImage(const QString &sourcePath)
 void Conversation::dispatch(const QString &toolCallId, const QString &name,
                             const QString &argsText)
 {
-    DebugTrace::verbose(
-        "conversation",
-        QStringLiteral("dispatch id=%1 toolCallId=%2 name=%3 argsLen=%4")
-            .arg(m_id, toolCallId, name)
-            .arg(argsText.size()));
-    if (m_planMode && isToolBlockedInPlanMode(name, argsText))
-    {
-        const QString message =
-            QStringLiteral(
-                "Error: tool `%1` is unavailable in plan mode. Stay in "
-                "exploration/planning, "
-                "or exit plan mode before implementation.")
-                .arg(name);
-        DebugTrace::verbose(
-            "conversation",
-            QStringLiteral("dispatch blocked by plan mode id=%1 tool=%2")
-                .arg(m_id, name));
-        setToolError(toolCallId, message);
-        const int i = indexOfTool(toolCallId);
-        if (i >= 0)
-            maybeContinueAfterToolResolution(i);
-        return;
-    }
-    setToolRunning(toolCallId);
-    const QJsonObject argsObj =
-        argsText.isEmpty()
-            ? QJsonObject()
-            : QJsonDocument::fromJson(argsText.toUtf8()).object();
-    m_registry->dispatch(m_id, toolCallId, name, argsObj, m_workdir);
+    if (m_runtime)
+        m_runtime->dispatchTool(toolCallId, name, argsText);
 }
 
 void Conversation::denyTool(const QString &toolCallId)
 {
-    setToolDenied(toolCallId);
-    const int i = indexOfTool(toolCallId);
-    if (i >= 0)
-        maybeContinueAfterToolResolution(i);
+    if (m_runtime)
+        m_runtime->denyTool(toolCallId);
 }
 
 void Conversation::setError(const QString &msg)
@@ -1004,6 +1247,47 @@ void Conversation::setError(const QString &msg)
                             .arg(msg));
     m_error = msg;
     emit errorChanged();
+}
+
+void Conversation::syncClientSettings()
+{
+    if (!m_client || !m_settings)
+        return;
+    m_client->setBaseUrl(m_settings->apiBaseUrl());
+    m_client->setApiKey(m_settings->apiKey());
+    m_client->setModel(m_settings->model());
+    m_client->setStreaming(m_settings->streaming());
+}
+
+void Conversation::resendAfterToolResolution()
+{
+    ensureClient();
+    maybeAutoCompact();
+    m_clientFinished = false;
+    syncClientSettings();
+    m_client->send(buildMessages(),
+                   m_registry->openaiToolsArray(
+                       schedulingToolsAvailableForCurrentTurn()));
+}
+
+void Conversation::updatePlanTextFromLatestAssistant()
+{
+    if (!m_planMode)
+        return;
+    for (int i = int(m_items.size()) - 1; i >= 0; --i)
+    {
+        if (m_items[i].kind != QStringLiteral("assistant"))
+            continue;
+        const QString plan = m_items[i].text.trimmed();
+        if (!plan.isEmpty() && plan != m_planText)
+        {
+            m_planText = plan;
+            emit planTextChanged();
+            persistPlanFile();
+            touch();
+        }
+        break;
+    }
 }
 
 void Conversation::onClientDelta(const QString &text)
@@ -1069,137 +1353,20 @@ void Conversation::onClientToolName(const QString &id, const QString &name)
 void Conversation::onClientReady(const QString &id, const QString &name,
                                  const QJsonObject &args)
 {
-    flushPendingAssistantDeltas();
-    const QString argsStr =
-        QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Indented));
-    const bool scheduledExecution = !m_scheduledTaskId.isEmpty();
-    const bool needs =
-        scheduledExecution ? false : m_registry->permissionRequired(name);
-    DebugTrace::verbose("conversation",
-                        QStringLiteral("onClientReady id=%1 toolCallId=%2 "
-                                       "name=%3 needsApproval=%4 scheduled=%5 "
-                                       "argsKeys=%6")
-                            .arg(m_id, id, name)
-                            .arg(needs)
-                            .arg(scheduledExecution)
-                            .arg(args.keys().join(',')));
-    setToolReady(id, name, argsStr, needs);
-    // bypass → auto-dispatch. No approval gate.
-    if (scheduledExecution || m_settings->bypassPermissions() || !needs)
-        dispatch(id, name, argsStr);
-    else
-        m_clientFinished = true;
+    if (m_runtime)
+        m_runtime->onClientReady(id, name, args);
 }
 
 void Conversation::onClientFinished()
 {
-    flushPendingAssistantDeltas();
-    DebugTrace::verbose(
-        "conversation",
-        QStringLiteral("onClientFinished id=%1 pendingResend=%2")
-            .arg(m_id)
-            .arg(m_pendingResend));
-    m_clientFinished = true;
-    for (int i = int(m_items.size()) - 1; i >= 0; --i)
-    {
-        if (m_items[i].kind == QStringLiteral("tool"))
-            continue;
-        if (m_items[i].kind == QStringLiteral("assistant") && !m_items[i].complete)
-        {
-            Item it = m_items[i];
-            it.complete = true;
-            updateRow(i, it);
-        }
-        break;
-    }
-    setStreaming(false);
-    // A tool may have finished before the stream's finished() signal arrived
-    // (fast tools). If so, the resend was deferred — do it now that the client
-    // is idle.
-    if (m_pendingResend)
-    {
-        m_pendingResend = false;
-        // The new request is a streaming turn — flip streaming back on so the
-        // UI shows "replying" while the model responds to the tool result.
-        setStreaming(true);
-        maybeAutoCompact();
-        m_clientFinished = false;
-        m_client->send(buildMessages(),
-                       m_registry->openaiToolsArray(
-                           schedulingToolsAvailableForCurrentTurn()));
-    }
-    if (m_planMode)
-    {
-        for (int i = int(m_items.size()) - 1; i >= 0; --i)
-        {
-            if (m_items[i].kind == QStringLiteral("assistant"))
-            {
-                const QString plan = m_items[i].text.trimmed();
-                if (!plan.isEmpty() && plan != m_planText)
-                {
-                    m_planText = plan;
-                    emit planTextChanged();
-                    persistPlanFile();
-                    touch();
-                }
-                break;
-            }
-        }
-    }
-    if (!m_scheduledTaskId.isEmpty() && !m_pendingResend &&
-        !hasUnresolvedToolCalls())
-        finishScheduledTask(true);
+    if (m_runtime)
+        m_runtime->onClientFinished();
 }
 
 void Conversation::onClientError(const QString &msg)
 {
-    flushPendingAssistantDeltas();
-    DebugTrace::verbose(
-        "conversation",
-        QStringLiteral("onClientError id=%1 len=%2").arg(m_id).arg(msg.size()));
-    m_clientFinished = true;
-    const QString lower = msg.toLower();
-    const bool contextExceeded =
-        lower.contains(QStringLiteral("context_length_exceeded")) ||
-        lower.contains(QStringLiteral("context window")) ||
-        lower.contains(QStringLiteral("input exceeds the context")) ||
-        lower.contains(QStringLiteral("prompt too long"));
-    if (contextExceeded && !m_compactRetryAttempted && m_settings &&
-        m_settings->compact())
-    {
-        DebugTrace::verbose(
-            "compact",
-            QStringLiteral("fallback retry id=%1 reason=context-exceeded")
-                .arg(m_id));
-        m_compactRetryAttempted = true;
-        setStreaming(true);
-        if (maybeAutoCompact({}, {}, true))
-        {
-            setError(QString());
-            m_client->send(buildMessages(),
-                           m_registry->openaiToolsArray(
-                               schedulingToolsAvailableForCurrentTurn()));
-            return;
-        }
-        setStreaming(false);
-    }
-    for (int i = int(m_items.size()) - 1; i >= 0; --i)
-    {
-        if (m_items[i].kind == QStringLiteral("tool"))
-            continue;
-        if (m_items[i].kind == QStringLiteral("assistant") && !m_items[i].complete)
-        {
-            beginRemoveRows(QModelIndex(), i, i);
-            m_items.removeAt(i);
-            endRemoveRows();
-            touch();
-        }
-        break;
-    }
-    setStreaming(false);
-    setError(msg);
-    if (!m_scheduledTaskId.isEmpty())
-        finishScheduledTask(false);
+    if (m_runtime)
+        m_runtime->onClientError(msg);
 }
 
 bool Conversation::toolGroupReadyToContinue(int toolIndex) const
@@ -1231,66 +1398,15 @@ bool Conversation::toolGroupReadyToContinue(int toolIndex) const
 
 void Conversation::maybeContinueAfterToolResolution(int toolIndex)
 {
-    if (!toolGroupReadyToContinue(toolIndex))
-        return;
-
-    DebugTrace::verbose("conversation",
-                        QStringLiteral("maybeContinueAfterToolResolution id=%1 "
-                                       "toolIndex=%2 prevStreaming=%3")
-                            .arg(m_id)
-                            .arg(toolIndex)
-                            .arg(m_streaming));
-    const bool prevStreaming = m_streaming;
-    appendAssistant();
-    if (prevStreaming || !m_clientFinished)
-    {
-        m_pendingResend = true;
-    }
-    else
-    {
-        ensureClient();
-        maybeAutoCompact();
-        m_clientFinished = false;
-        m_client->send(buildMessages(),
-                       m_registry->openaiToolsArray(
-                           schedulingToolsAvailableForCurrentTurn()));
-    }
-    if (m_planMode)
-    {
-        for (int i = int(m_items.size()) - 1; i >= 0; --i)
-        {
-            if (m_items[i].kind == QStringLiteral("assistant"))
-            {
-                const QString plan = m_items[i].text.trimmed();
-                if (!plan.isEmpty() && plan != m_planText)
-                {
-                    m_planText = plan;
-                    emit planTextChanged();
-                    persistPlanFile();
-                    touch();
-                }
-                break;
-            }
-        }
-    }
+    if (m_runtime)
+        m_runtime->continueAfterToolResolution(toolIndex);
 }
 
 void Conversation::onToolFinished(const QString &ownerId, const QString &id,
                                   const QString &, const QString &result)
 {
-    if (ownerId != m_id)
-        return;
-    // Only process results for tool calls that belong to THIS conversation.
-    const int toolIndex = indexOfTool(id);
-    if (toolIndex < 0)
-        return;
-    DebugTrace::verbose(
-        "conversation",
-        QStringLiteral("onToolFinished id=%1 toolCallId=%2 resultLen=%3")
-            .arg(m_id, id)
-            .arg(result.size()));
-    setToolDone(id, result);
-    maybeContinueAfterToolResolution(toolIndex);
+    if (m_runtime)
+        m_runtime->onToolFinished(ownerId, id, result);
 }
 
 bool Conversation::hasUnresolvedToolCalls() const
@@ -1308,34 +1424,15 @@ bool Conversation::hasUnresolvedToolCalls() const
 
 void Conversation::finishScheduledTask(bool success)
 {
-    const QString id = m_scheduledTaskId;
-    if (id.isEmpty())
-        return;
-    QString summary = m_error;
-    if (summary.isEmpty())
-    {
-        for (int i = int(m_items.size()) - 1; i >= 0; --i)
-        {
-            if (m_items[i].kind == QStringLiteral("assistant") &&
-                !m_items[i].text.trimmed().isEmpty())
-            {
-                summary = m_items[i].text.trimmed();
-                break;
-            }
-        }
-    }
-    if (summary.isEmpty())
-        summary = success ? QStringLiteral("Task completed.")
-                          : QStringLiteral("Task failed.");
-    m_scheduledTaskId.clear();
-    m_scheduledInstruction.clear();
-    emit scheduledTaskFinished(id, success, summary);
+    if (m_runtime)
+        m_runtime->finishScheduledTask(success);
 }
 
 int Conversation::estimatedRequestTokens(const QString &pendingText,
                                          const QStringList &pendingImages) const
 {
-    QJsonArray messages = buildMessagesFromRow(firstLiveRow());
+    QJsonArray messages =
+        buildMessagesFromRow(firstLiveRow(), buildMessagesContext());
     if (!pendingText.trimmed().isEmpty() || !pendingImages.isEmpty())
     {
         QJsonObject pending;

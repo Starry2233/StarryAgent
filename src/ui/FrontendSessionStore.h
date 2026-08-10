@@ -16,6 +16,12 @@ class FrontendSessionStore : public QAbstractListModel
     Q_OBJECT
     Q_PROPERTY(ConversationManager *conversationManager READ conversationManager WRITE setConversationManager NOTIFY conversationManagerChanged)
     Q_PROPERTY(Conversation *activeConversation READ activeConversation NOTIFY activeConversationChanged)
+    Q_PROPERTY(QAbstractItemModel *activeConversationModel READ
+                   activeConversationModel NOTIFY activeConversationChanged)
+    Q_PROPERTY(bool activeConversationStreaming READ activeConversationStreaming
+                   NOTIFY activeConversationChanged)
+    Q_PROPERTY(QString activeConversationError READ activeConversationError NOTIFY
+                   activeConversationChanged)
     Q_PROPERTY(int count READ count NOTIFY sessionsChanged)
 
   public:
@@ -43,14 +49,21 @@ class FrontendSessionStore : public QAbstractListModel
     void setConversationManager(ConversationManager *manager);
 
     Conversation *activeConversation() const { return m_activeConversation; }
+    QAbstractItemModel *activeConversationModel() const;
+    bool activeConversationStreaming() const;
+    QString activeConversationError() const;
     int count() const;
 
     Q_INVOKABLE Conversation *conversationAt(int index) const;
     Q_INVOKABLE Conversation *conversationById(const QString &id) const;
     Q_INVOKABLE void setActiveConversation(Conversation *conversation);
+    Q_INVOKABLE void setActiveConversationById(const QString &id);
     Q_INVOKABLE void openNewConversation(const QString &modeId);
     Q_INVOKABLE void removeConversation(Conversation *conversation);
+    Q_INVOKABLE void removeConversationById(const QString &id);
     Q_INVOKABLE void renameConversation(Conversation *conversation, const QString &newTitle);
+    Q_INVOKABLE void renameConversationById(const QString &id,
+                                            const QString &newTitle);
     Q_INVOKABLE void saveActiveConversation();
     Q_INVOKABLE void sendWithImages(const QString &text, const QStringList &imagePaths);
     Q_INVOKABLE void appendAssistantText(const QString &text);

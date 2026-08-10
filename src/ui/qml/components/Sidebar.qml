@@ -46,9 +46,9 @@ Item {
     ConfirmDialog {
         id: deleteDlg
         onConfirmed: if (root.targetConv) {
-            const c = root.targetConv
+            const convId = root.targetConv.id
             root.targetConv = null
-            frontendSessionStore.removeConversation(c)
+            frontendSessionStore.removeConversationById(convId)
         }
     }
     PropertiesDialog {
@@ -100,7 +100,11 @@ Item {
                 background: Rectangle { color: parent.down ? theme.clayDeep : theme.clay; radius: theme.rPill; implicitWidth: 64; implicitHeight: 32 }
                 onClicked: {
                     mConfirm.visible2 = false
-                    if (root.targetConv) { const c = root.targetConv; root.targetConv = null; frontendSessionStore.removeConversation(c) }
+                    if (root.targetConv) {
+                        const convId = root.targetConv.id
+                        root.targetConv = null
+                        frontendSessionStore.removeConversationById(convId)
+                    }
                 }
             }
         }
@@ -179,9 +183,7 @@ Item {
         const t = root.editingText.trim()
         root.editingText = ""
         if (t.length === 0) return
-        const conv = frontendSessionStore.conversationById(convId)
-        if (conv)
-            frontendSessionStore.renameConversation(conv, t)
+        frontendSessionStore.renameConversationById(convId, t)
     }
 
     // Flat mirror of conversations.conversations with a derived `bucket` role
@@ -220,15 +222,15 @@ Item {
         const nextRows = []
         const list = frontendSessionStore
         for (let i = 0; i < list.count; i++) {
-            const c = list.conversationAt(i)
-            if (!c)
+            const row = list.get(i)
+            if (!row)
                 continue
             nextRows.push({
-                convId: c.id,
-                title: c.title,
-                bucket: bucketOf(c.updated),
-                rel: relTime(c.updated),
-                active: frontendSessionStore.activeConversation && frontendSessionStore.activeConversation.id === c.id
+                convId: row.id,
+                title: row.title,
+                bucket: row.bucket,
+                rel: row.relativeTime,
+                active: row.active
             })
         }
         rowsData = nextRows
@@ -370,9 +372,7 @@ Item {
                     // A row is "active" only when its conversation is the
                     // current destination — NOT while settings is showing,
                     // so the gear and a conversation never highlight together.
-                    property bool isActive: !root.settingsActive
-                        && frontendSessionStore.activeConversation
-                        && frontendSessionStore.activeConversation.id === row.convId
+                    property bool isActive: !root.settingsActive && !!row.active
                     width: parent ? parent.width : 0
                     height: 44
                     radius: theme.rSm
@@ -395,9 +395,10 @@ Item {
                         onPressAndHold: (mouse) => {
                             held = true
                             if (root.editingId !== "") { root.commitRename(); return }
-                            const c = frontendSessionStore.conversationAt(index)
-                            if (!c) return
-                            root.targetConv = c
+                            root.targetConv = {
+                                id: row.convId,
+                                title: row.title
+                            }
                             root.openConversationMenu(rowMa, mouse.x, mouse.y)
                         }
                         onClicked: (mouse) => {
@@ -408,14 +409,15 @@ Item {
                                 root.commitRename()
                                 return
                             }
-                            const c = frontendSessionStore.conversationAt(index)
-                            if (!c) return
                             if (mouse.button === Qt.RightButton) {
-                                root.targetConv = c
+                                root.targetConv = {
+                                    id: row.convId,
+                                    title: row.title
+                                }
                                 root.openConversationMenu(rowMa, mouse.x, mouse.y)
                             } else {
                                 root.requestOpenConversation()
-                                frontendSessionStore.setActiveConversation(c)
+                                frontendSessionStore.setActiveConversationById(row.convId)
                             }
                         }
                     }

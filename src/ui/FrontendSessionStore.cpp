@@ -97,6 +97,21 @@ int FrontendSessionStore::count() const
     return m_rows.size();
 }
 
+QAbstractItemModel *FrontendSessionStore::activeConversationModel() const
+{
+    return m_activeConversation;
+}
+
+bool FrontendSessionStore::activeConversationStreaming() const
+{
+    return m_activeConversation && m_activeConversation->streaming();
+}
+
+QString FrontendSessionStore::activeConversationError() const
+{
+    return m_activeConversation ? m_activeConversation->error() : QString();
+}
+
 Conversation *FrontendSessionStore::conversationAt(int index) const
 {
     if (index < 0 || index >= m_rows.size())
@@ -118,6 +133,14 @@ void FrontendSessionStore::setActiveConversation(Conversation *conversation)
     m_conversationManager->setActive(conversation);
 }
 
+void FrontendSessionStore::setActiveConversationById(const QString &id)
+{
+    if (!m_conversationManager)
+        return;
+    if (Conversation *conversation = m_conversationManager->findById(id))
+        m_conversationManager->setActive(conversation);
+}
+
 void FrontendSessionStore::openNewConversation(const QString &modeId)
 {
     if (!m_conversationManager)
@@ -132,12 +155,29 @@ void FrontendSessionStore::removeConversation(Conversation *conversation)
     m_conversationManager->remove(conversation);
 }
 
+void FrontendSessionStore::removeConversationById(const QString &id)
+{
+    if (!m_conversationManager)
+        return;
+    if (Conversation *conversation = m_conversationManager->findById(id))
+        m_conversationManager->remove(conversation);
+}
+
 void FrontendSessionStore::renameConversation(Conversation *conversation,
                                               const QString &newTitle)
 {
     if (!m_conversationManager)
         return;
     m_conversationManager->rename(conversation, newTitle);
+}
+
+void FrontendSessionStore::renameConversationById(const QString &id,
+                                                  const QString &newTitle)
+{
+    if (!m_conversationManager)
+        return;
+    if (Conversation *conversation = m_conversationManager->findById(id))
+        m_conversationManager->rename(conversation, newTitle);
 }
 
 void FrontendSessionStore::saveActiveConversation()

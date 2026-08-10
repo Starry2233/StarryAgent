@@ -16,6 +16,7 @@ Item {
 
     property bool isDemo: false
     property var active: frontendSessionStore.activeConversation   // frontend-facing active conversation
+    property var activeModel: frontendSessionStore.activeConversationModel
     property var pendingImagePaths: []
     property bool imagePreviewVisible: false
     property string imagePreviewSource: ""
@@ -478,7 +479,7 @@ Item {
             // blocks). A small look-ahead keeps flick scrolling smooth without
             // prebuilding several full screens of history.
             cacheBuffer: Math.max(320, height * 0.5)
-            model: root.active   // Conversation* (QAbstractListModel) or null
+            model: root.activeModel   // active conversation model or null
             currentIndex: -1
 
             // Auto-scroll: stay pinned to the bottom while the assistant
@@ -494,10 +495,9 @@ Item {
             property int initialRestoreTimerRevision: 0
             property bool suppressAutoScrollTracking: false
             readonly property real _bottomSlack: 40   // px tolerance for "at bottom"
-            readonly property bool shouldFollowAssistant: root.active
-                && root.active.streaming
+            readonly property bool shouldFollowAssistant: frontendSessionStore.activeConversationStreaming
             readonly property bool shouldKeepBottomPinned: autoScroll && root.active
-                && (root.active.streaming || pendingImagePaths.length > 0)
+                && (frontendSessionStore.activeConversationStreaming || pendingImagePaths.length > 0)
             property bool pendingAnimatedFollow: false
 
             function targetBottomY() {
@@ -595,23 +595,16 @@ Item {
             }
 
             Connections {
-                target: root.active
-                ignoreUnknownSignals: true
-                function onStreamingChanged() {
+                target: frontendSessionStore
+                function onActiveConversationChanged() {
                     if (list.initialBottomRestore)
                         return
-                    if (root.active && root.active.streaming) {
+                    if (root.active && frontendSessionStore.activeConversationStreaming) {
                         list.enableAutoScroll("streaming")
                         list.scheduleFollowScroll(false)
                     }
                 }
-                function onRowsInserted() {
-                    if (list.initialBottomRestore)
-                        return
-                    if (list.autoScroll || list.shouldKeepBottomPinned)
-                        list.scheduleFollowScroll(false)
-                }
-                function onDataChanged() {
+                function onSessionsChanged() {
                     if (list.initialBottomRestore)
                         return
                     if (list.autoScroll || list.shouldKeepBottomPinned)
@@ -877,7 +870,7 @@ Item {
 
     Rectangle {
         id: errorBanner
-        visible: root.active && root.active.error.length > 0
+        visible: root.active && frontendSessionStore.activeConversationError.length > 0
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: inputBar.top
@@ -887,7 +880,7 @@ Item {
             id: errorText
             anchors.fill: parent
             anchors.margins: theme.sp2
-            text: root.active ? root.active.error : ""
+            text: frontendSessionStore.activeConversationError
             color: theme.clayDeep
             font.family: theme.fontMono
             font.pixelSize: 11
@@ -1063,7 +1056,7 @@ Item {
                         }
                         if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
                                 && !(event.modifiers & Qt.ShiftModifier)) {
-                            if (root.active && root.active.streaming) {
+                            if (root.active && frontendSessionStore.activeConversationStreaming) {
                                 event.accepted = true
                                 return
                             }
@@ -1154,7 +1147,7 @@ Item {
                         // Dim + disable while this conversation's turn is in
                         // flight (streaming or tool executing) so the user
                         // can't queue a second message into the same turn.
-                        property bool busy: root.active && root.active.streaming
+                        property bool busy: root.active && frontendSessionStore.activeConversationStreaming
                         color: (inputField.text.trim().length > 0 || root.pendingImagePaths.length > 0) && !sendBtn.busy
                                ? (sendMa.pressed ? theme.clayDeep : theme.clay)
                                : theme.accent(0.30)
@@ -1333,7 +1326,7 @@ Item {
             readonly property string filtered: root.filterThink((rowData && rowData.text) ? rowData.text : "")
             readonly property bool hasRawText: (rowData && rowData.text ? rowData.text.length : 0) > 0
             readonly property bool thinking: hasRawText && filtered.length === 0
-            readonly property bool isActiveStreamingRow: root.active && root.active.streaming && rowIndex === list.count - 1
+            readonly property bool isActiveStreamingRow: root.active && frontendSessionStore.activeConversationStreaming && rowIndex === list.count - 1
             readonly property bool shouldShowStreamingText: isActiveStreamingRow
             readonly property bool hasRenderableText: filtered.length > 0
             readonly property bool shouldShowMarkdown: hasRenderableText && !thinking && !isActiveStreamingRow
