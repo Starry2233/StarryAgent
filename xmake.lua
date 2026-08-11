@@ -41,6 +41,55 @@ local function deploy_qt_runtime(target)
     -- execution here instead of failing the whole build.
 end
 
+local function stage_syntax_highlighting_data(target, batchcmds)
+    local data_src = path.join(os.projectdir(), "external", "syntax-highlighting", "data")
+    if not os.isdir(data_src) then
+        return
+    end
+
+    local syntax_src = path.join(data_src, "syntax")
+    local generators_dir = path.join(data_src, "generators")
+    local doxygen_src = path.join(syntax_src, "doxygen.xml")
+    local lua_src = path.join(syntax_src, "lua.xml")
+    local xml_src = path.join(syntax_src, "xml.xml")
+    local doxygenlua_src = path.join(syntax_src, "doxygenlua.xml")
+    local xslt_src = path.join(syntax_src, "xslt.xml")
+    local doxygen_script = path.join(generators_dir, "generate-doxygenlua.pl")
+    local xslt_script = path.join(generators_dir, "generate-xslt.pl")
+    local xslt_base = path.join(generators_dir, "xslt.base.xml")
+
+    if os.isfile(doxygen_src) and os.isfile(lua_src) and os.isfile(doxygen_script)
+       and (not os.isfile(doxygenlua_src)
+            or os.mtime(doxygen_script) > os.mtime(doxygenlua_src)
+            or os.mtime(doxygen_src) > os.mtime(doxygenlua_src)
+            or os.mtime(lua_src) > os.mtime(doxygenlua_src)) then
+        batchcmds:vrunv("perl", {doxygen_script, doxygen_src, doxygenlua_src})
+    end
+    if os.isfile(xml_src) and os.isfile(xslt_script) and os.isfile(xslt_base)
+       and (not os.isfile(xslt_src)
+            or os.mtime(xslt_script) > os.mtime(xslt_src)
+            or os.mtime(xslt_base) > os.mtime(xslt_src)
+            or os.mtime(xml_src) > os.mtime(xslt_src)) then
+        batchcmds:vrunv("perl", {xml_src, xslt_src}, {program = xslt_script})
+    end
+end
+
+local function ensure_generated_syntax_in_target(target, batchcmds)
+    local syntax_src = path.join(os.projectdir(), "external", "syntax-highlighting", "data", "syntax")
+    local syntax_dst = path.join(target:targetdir(), "syntax-highlighting-data", "syntax")
+    if not os.isdir(syntax_src) then
+        return
+    end
+
+    batchcmds:mkdir(syntax_dst)
+    for _, name in ipairs({"doxygenlua.xml", "xslt.xml"}) do
+        local src = path.join(syntax_src, name)
+        if os.isfile(src) then
+            batchcmds:cp(src, path.join(syntax_dst, name))
+        end
+    end
+end
+
 local function compile_translations(target, batchcmds)
     local lrelease = os.getenv("LRELEASE")
     if not lrelease or #lrelease == 0 then
@@ -498,15 +547,11 @@ target("starryagent")
     end
 
     before_buildcmd_files(function (target, batchcmds)
+        stage_syntax_highlighting_data(target, batchcmds)
+        ensure_generated_syntax_in_target(target, batchcmds)
         compile_translations(target, batchcmds)
     end)
 
     after_build(function (target)
         deploy_qt_runtime(target)
-        local data_src = path.join(os.projectdir(), "external", "syntax-highlighting", "data")
-        if os.isdir(data_src) then
-            local data_dst = path.join(target:targetdir(), "syntax-highlighting-data")
-            os.rm(data_dst)
-            os.cp(data_src, data_dst)
-        end
     end)

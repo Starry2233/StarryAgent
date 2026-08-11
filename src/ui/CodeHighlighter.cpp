@@ -20,12 +20,12 @@ QString syntaxDataDir()
 {
     const QString appDir = QCoreApplication::applicationDirPath();
     const QStringList candidates = {
-        QDir(appDir).filePath(QStringLiteral("syntax-highlighting-data")),
-        QDir(appDir).filePath(QStringLiteral("../syntax-highlighting-data")),
         QDir::cleanPath(QDir(appDir).filePath(
             QStringLiteral("../../../../external/syntax-highlighting/data"))),
         QDir::cleanPath(QDir::currentPath() +
                         QStringLiteral("/external/syntax-highlighting/data")),
+        QDir(appDir).filePath(QStringLiteral("syntax-highlighting-data")),
+        QDir(appDir).filePath(QStringLiteral("../syntax-highlighting-data")),
         QStringLiteral("E:/StarryAgent/external/syntax-highlighting/data"),
     };
 
