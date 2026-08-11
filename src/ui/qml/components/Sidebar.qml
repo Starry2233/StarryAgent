@@ -25,6 +25,24 @@ Item {
     signal requestOpenConversation()
     signal requestClose()   // drawer mode: ask the parent to close the drawer
 
+    function displayDateTime(value) {
+        if (!value)
+            return ""
+        if (value instanceof Date && !isNaN(value.getTime()))
+            return Qt.formatDateTime(value, "yyyy-MM-dd HH:mm")
+        if (typeof value === "string") {
+            const parsed = new Date(value)
+            if (!isNaN(parsed.getTime()))
+                return Qt.formatDateTime(parsed, "yyyy-MM-dd HH:mm")
+            return value
+        }
+        return String(value)
+    }
+
+    function displayField(value) {
+        return value === undefined || value === null ? "" : String(value)
+    }
+
     // --- Context menu (Rename / Delete / Properties) ---
     ThemedMenu {
         id: ctxMenu
@@ -129,16 +147,16 @@ Item {
             Text { text: qsTr("Conversation Properties"); color: theme.ink; font.family: theme.fontDisplay; font.pixelSize: 15; font.weight: Font.Medium }
             Repeater {
                 model: [
-                    { label: qsTr("Title"), value: root.targetConv ? root.targetConv.title : "" },
-                    { label: qsTr("Mode"), value: root.targetConv ? root.targetConv.modeId : "" },
-                    { label: qsTr("ID"),   value: root.targetConv ? root.targetConv.id : "" },
-                    { label: qsTr("Created"), value: root.targetConv ? Qt.formatDateTime(root.targetConv.created, "yyyy-MM-dd HH:mm") : "" },
-                    { label: qsTr("Updated"), value: root.targetConv ? Qt.formatDateTime(root.targetConv.updated, "yyyy-MM-dd HH:mm") : "" }
+                    { label: qsTr("Title"), value: root.targetConv ? root.displayField(root.targetConv.title) : "" },
+                    { label: qsTr("Mode"), value: root.targetConv ? root.displayField(root.targetConv.modeId) : "" },
+                    { label: qsTr("ID"),   value: root.targetConv ? root.displayField(root.targetConv.id) : "" },
+                    { label: qsTr("Created"), value: root.targetConv ? root.displayDateTime(root.targetConv.created) : "" },
+                    { label: qsTr("Updated"), value: root.targetConv ? root.displayDateTime(root.targetConv.updated) : "" }
                 ]
                 delegate: Column {
                     width: parent.width; spacing: 1
                     Text { text: modelData.label; color: theme.inkSoft; font.family: theme.fontBody; font.pixelSize: 9; font.letterSpacing: 1; font.capitalization: Font.AllUppercase }
-                    Text { width: parent.width; text: modelData.value; color: theme.ink; font.family: theme.fontMono; font.pixelSize: 11; wrapMode: Text.Wrap }
+                    Text { width: parent.width; text: root.displayField(modelData.value); color: theme.ink; font.family: theme.fontMono; font.pixelSize: 11; wrapMode: Text.Wrap }
                 }
             }
             Button {
@@ -226,8 +244,12 @@ Item {
             if (!row)
                 continue
             nextRows.push({
+                conversation: row.conversation,
                 convId: row.id,
                 title: row.title,
+                modeId: row.modeId,
+                created: row.created,
+                updated: row.updated,
                 bucket: row.bucket,
                 rel: row.relativeTime,
                 active: row.active
@@ -395,9 +417,12 @@ Item {
                         onPressAndHold: (mouse) => {
                             held = true
                             if (root.editingId !== "") { root.commitRename(); return }
-                            root.targetConv = {
+                            root.targetConv = row.conversation || {
                                 id: row.convId,
-                                title: row.title
+                                title: row.title,
+                                modeId: row.modeId,
+                                created: row.created,
+                                updated: row.updated
                             }
                             root.openConversationMenu(rowMa, mouse.x, mouse.y)
                         }
@@ -410,9 +435,12 @@ Item {
                                 return
                             }
                             if (mouse.button === Qt.RightButton) {
-                                root.targetConv = {
+                                root.targetConv = row.conversation || {
                                     id: row.convId,
-                                    title: row.title
+                                    title: row.title,
+                                    modeId: row.modeId,
+                                    created: row.created,
+                                    updated: row.updated
                                 }
                                 root.openConversationMenu(rowMa, mouse.x, mouse.y)
                             } else {

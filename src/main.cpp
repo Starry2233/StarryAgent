@@ -50,7 +50,7 @@
 #include "ui/MarkdownParser.h"
 #include "ui/FrontendSessionStore.h"
 #include "ui/BackendStore.h"
-#include "ipc/BackendProcessTransport.h"
+#include "ipc/BackendWebSocketTransport.h"
 #include "ui/TrayController.h"
 #include "ui/ToastProxy.h"
 #include "ui/ToastService.h"
@@ -173,7 +173,7 @@ bool isRunningInImooDevice()
     }
     return found;
 }
-}
+} // namespace
 #endif
 
 int main(int argc, char *argv[])
@@ -350,6 +350,7 @@ int main(int argc, char *argv[])
 
     QCoreApplication::setOrganizationName("StarryAgent");
     QCoreApplication::setApplicationName("StarryAgent");
+
 #ifdef Q_OS_ANDROID
     QGuiApplication app(argc, argv);
     app.setQuitOnLastWindowClosed(false);
@@ -483,10 +484,11 @@ int main(int argc, char *argv[])
 
     const bool demoMode =
         argc > 1 && QString::fromLocal8Bit(argv[1]) == "--demo";
-    const bool splitMode = rawArgs.contains(QStringLiteral("--split"));
-    DebugTrace::verbose("app", QStringLiteral("demoMode=%1 splitMode=%2 logType=%3")
+    const QString backendMode = settings.backendMode();
+    const bool useRemoteBackend =
+        backendMode == QStringLiteral("remotewebsocket");
+    DebugTrace::verbose("app", QStringLiteral("demoMode=%1 logType=%2")
                                    .arg(demoMode)
-                                   .arg(splitMode)
                                    .arg(DebugTrace::logType()));
 
     ToolRegistry toolRegistry(&config, &settings);
@@ -497,23 +499,34 @@ int main(int argc, char *argv[])
     ConversationManager conversations(&config, &settings, &toolRegistry,
                                       !demoMode);
     FrontendSessionStore frontendSessionStore;
-    StarryAgent::BackendProcessTransport backendTransport;
+    StarryAgent::BackendWebSocketTransport backendWebSocketTransport;
     StarryAgent::BackendStore backendStore;
-    if (splitMode)
+    backendStore.setSettings(&settings);
+    bool backendStoreActive = false;
+    if (useRemoteBackend)
     {
-        backendStore.setTransport(&backendTransport);
-        backendTransport.setProgram(QCoreApplication::applicationFilePath());
-        backendTransport.setArguments({QStringLiteral("--backend")});
-        if (backendTransport.start())
+        backendStore.setTransport(&backendWebSocketTransport);
+        backendWebSocketTransport.setUrl(QUrl(settings.remoteBackendUrl()));
+        backendWebSocketTransport.setBearerToken(settings.remoteBackendToken());
+        backendWebSocketTransport.setAutoReconnect(
+            settings.remoteBackendAutoReconnect());
+        QObject::connect(&backendWebSocketTransport,
+                         &StarryAgent::BackendWebSocketTransport::started, &app,
+                         [&backendStore]
+                         {
+                             backendStore.requestBootstrap();
+                             backendStore.syncSettings();
+                         });
+        if (backendWebSocketTransport.start())
         {
-            backendStore.requestBootstrap();
+            backendStoreActive = true;
         }
         else
         {
-            qWarning() << "failed to start backend process, falling back to monolith";
+            qWarning() << "failed to connect remote backend, falling back to monolith";
         }
     }
-    if (!splitMode || !backendTransport.isRunning())
+    if (!backendStoreActive)
         frontendSessionStore.setConversationManager(&conversations);
     ScheduledTaskManager scheduledTasks(&config, &settings, &conversations);
     conversations.setScheduledTaskManager(&scheduledTasks);
@@ -613,8 +626,8 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("skillInstallManager", &skillInstallManager);
     engine.rootContext()->setContextProperty("toolRegistry", &toolRegistry);
     engine.rootContext()->setContextProperty("frontendSessionStore",
-                                             splitMode ? static_cast<QObject *>(&backendStore)
-                                                       : static_cast<QObject *>(&frontendSessionStore));
+                                             backendStoreActive ? static_cast<QObject *>(&backendStore)
+                                                                : static_cast<QObject *>(&frontendSessionStore));
     engine.rootContext()->setContextProperty("scheduledTasks", &scheduledTasks);
     engine.rootContext()->setContextProperty("markdownParser", &markdownParser);
     engine.rootContext()->setContextProperty("clipboard", &clipboard);

@@ -121,6 +121,11 @@ QJsonObject settingsSnapshot(const Settings &settings)
     obj.insert(QStringLiteral("streaming"), settings.streaming());
     obj.insert(QStringLiteral("bypassPermissions"), settings.bypassPermissions());
     obj.insert(QStringLiteral("compact"), settings.compact());
+    obj.insert(QStringLiteral("backendMode"), settings.backendMode());
+    obj.insert(QStringLiteral("remoteBackendUrl"), settings.remoteBackendUrl());
+    obj.insert(QStringLiteral("remoteBackendToken"), settings.remoteBackendToken());
+    obj.insert(QStringLiteral("remoteBackendAutoReconnect"),
+               settings.remoteBackendAutoReconnect());
     obj.insert(QStringLiteral("theme"), settings.theme());
     obj.insert(QStringLiteral("language"), settings.language());
     obj.insert(QStringLiteral("currentThemeId"), settings.currentThemeId());

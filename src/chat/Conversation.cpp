@@ -1097,10 +1097,35 @@ Conversation *Conversation::fromJson(const QJsonObject &obj, QString indexMd,
                          std::move(skillsMd), parent);
     c->m_id = obj.value("id").toString(c->m_id);
     c->m_title = obj.value("title").toString(c->m_title);
-    c->m_created = QDateTime::fromMSecsSinceEpoch(
-        obj.value("created").toVariant().toLongLong());
-    c->m_updated = QDateTime::fromMSecsSinceEpoch(
-        obj.value("updated").toVariant().toLongLong());
+
+    auto parseStoredDateTime = [](const QJsonValue &value) -> QDateTime
+    {
+        if (value.isDouble())
+            return QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(value.toDouble()));
+
+        const QVariant variant = value.toVariant();
+        if (variant.canConvert<qint64>())
+        {
+            bool ok = false;
+            const qint64 msecs = variant.toLongLong(&ok);
+            if (ok)
+                return QDateTime::fromMSecsSinceEpoch(msecs);
+        }
+
+        const QString text = value.toString().trimmed();
+        if (text.isEmpty())
+            return {};
+
+        QDateTime dt = QDateTime::fromString(text, Qt::ISODateWithMs);
+        if (!dt.isValid())
+            dt = QDateTime::fromString(text, Qt::ISODate);
+        return dt;
+    };
+
+    const QDateTime created = parseStoredDateTime(obj.value("created"));
+    const QDateTime updated = parseStoredDateTime(obj.value("updated"));
+    c->m_created = created.isValid() ? created : QDateTime::currentDateTime();
+    c->m_updated = updated.isValid() ? updated : c->m_created;
     c->m_compactSummary = obj.value("compactSummary").toString();
     c->m_compactUntilRow = qMax(0, obj.value("compactUntilRow").toInt(0));
     c->m_planMode = obj.value("planMode").toBool(false);

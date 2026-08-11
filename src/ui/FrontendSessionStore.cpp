@@ -126,6 +126,25 @@ Conversation *FrontendSessionStore::conversationById(const QString &id) const
     return m_conversationManager->findById(id);
 }
 
+QVariantMap FrontendSessionStore::get(int row) const
+{
+    if (row < 0 || row >= m_rows.size())
+        return {};
+
+    const QModelIndex modelIndex = index(row, 0);
+    QVariantMap result;
+    result.insert(QStringLiteral("conversation"), data(modelIndex, ConversationRole));
+    result.insert(QStringLiteral("id"), data(modelIndex, IdRole));
+    result.insert(QStringLiteral("title"), data(modelIndex, TitleRole));
+    result.insert(QStringLiteral("modeId"), data(modelIndex, ModeIdRole));
+    result.insert(QStringLiteral("created"), data(modelIndex, CreatedRole));
+    result.insert(QStringLiteral("updated"), data(modelIndex, UpdatedRole));
+    result.insert(QStringLiteral("bucket"), data(modelIndex, BucketRole));
+    result.insert(QStringLiteral("relativeTime"), data(modelIndex, RelativeTimeRole));
+    result.insert(QStringLiteral("active"), data(modelIndex, ActiveRole));
+    return result;
+}
+
 void FrontendSessionStore::setActiveConversation(Conversation *conversation)
 {
     if (!m_conversationManager)

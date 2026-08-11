@@ -10,10 +10,11 @@
 #include <QVector>
 
 class QJsonArray;
+class Settings;
 
 namespace StarryAgent
 {
-class BackendProcessTransport;
+class IBackendTransport;
 
 class BackendStore : public QAbstractListModel
 {
@@ -74,6 +75,8 @@ class BackendStore : public QAbstractListModel
 
     explicit BackendStore(QObject *parent = nullptr);
 
+    void setSettings(::Settings *settings);
+
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     QVariant data(const QModelIndex &index, int role) const override;
     QHash<int, QByteArray> roleNames() const override;
@@ -90,9 +93,7 @@ class BackendStore : public QAbstractListModel
     bool connected() const;
     int count() const { return m_conversations.size(); }
 
-    void setTransport(BackendProcessTransport *transport);
-    Q_INVOKABLE bool startLocalProcess(const QString &program,
-                                       const QStringList &arguments = {});
+    void setTransport(IBackendTransport *transport);
     Q_INVOKABLE bool requestBootstrap();
     Q_INVOKABLE QVariantMap get(int row) const;
     Q_INVOKABLE void saveActiveConversation();
@@ -122,6 +123,7 @@ class BackendStore : public QAbstractListModel
     Q_INVOKABLE void denyTool(const QString &toolCallId);
     Q_INVOKABLE QString importImage(const QString &sourcePath);
     Q_INVOKABLE void appendAssistantText(const QString &text);
+    Q_INVOKABLE void syncSettings();
 
   signals:
     void activeConversationChanged();
@@ -178,6 +180,7 @@ class BackendStore : public QAbstractListModel
     void applyBootstrap(const QJsonObject &payload);
     void applyConversations(const QJsonArray &items);
     void applyActiveRows(const QJsonArray &rows);
+    void applySettingsSnapshot(const QJsonObject &snapshot);
     void updateActiveConversationSummary(const QJsonObject &patch);
     int conversationIndexById(const QString &conversationId) const;
     ConversationSummary conversationFromJson(const QJsonObject &obj) const;
@@ -186,7 +189,8 @@ class BackendStore : public QAbstractListModel
     void emitConversationDataChanged(int row);
     void refreshActiveConversationData();
 
-    BackendProcessTransport *m_transport = nullptr;
+    IBackendTransport *m_transport = nullptr;
+    ::Settings *m_settings = nullptr;
     QVector<ConversationSummary> m_conversations;
     QVector<MessageRow> m_activeRows;
     MessageModel *m_activeMessageModel = nullptr;

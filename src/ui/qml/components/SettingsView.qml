@@ -397,6 +397,252 @@ Item {
             }
 
             Text {
+                text: qsTr("Backend")
+                color: theme.inkSoft
+                font.family: theme.fontBody
+                font.pixelSize: 10
+                font.letterSpacing: 1
+                font.capitalization: Font.AllUppercase
+                topPadding: theme.sp2
+            }
+            Text {
+                text: qsTr("Backend Mode")
+                color: theme.ink
+                font.family: theme.fontBody
+                font.pixelSize: 12
+            }
+            ComboBox {
+                id: backendModeCombo
+                width: parent.width
+                model: [
+                    { value: "monolith", label: qsTr("Monolith") },
+                    { value: "remotewebsocket", label: qsTr("Remote WebSocket") }
+                ]
+                currentIndex: {
+                    for (let i = 0; i < model.length; ++i) {
+                        if (model[i].value === settings.backendMode)
+                            return i
+                    }
+                    return 0
+                }
+                onActivated: {
+                    if (currentIndex >= 0)
+                        settings.backendMode = model[currentIndex].value
+                }
+                textRole: "label"
+                font.family: theme.fontBody
+                font.pixelSize: 12
+                padding: 0
+                topPadding: 0
+                bottomPadding: 0
+                leftPadding: 0
+                rightPadding: 0
+
+                delegate: ItemDelegate {
+                    id: backendModeDelegate
+                    required property int index
+                    required property var modelData
+                    width: backendModeCombo.width - theme.sp2 * 2
+                    height: 44
+                    padding: 0
+                    hoverEnabled: true
+
+                    background: Rectangle {
+                        Behavior on color { ColorAnimation { duration: 140 } }
+                        Behavior on border.color { ColorAnimation { duration: 140 } }
+                        radius: theme.rSm
+                        color: backendModeDelegate.highlighted
+                               ? (theme.accent(theme.dark ? 0.14 : 0.10))
+                               : (backendModeCombo.currentIndex === backendModeDelegate.index
+                                  ? (theme.accent(theme.dark ? 0.09 : 0.06))
+                                  : "transparent")
+                        border.width: backendModeCombo.currentIndex === backendModeDelegate.index ? 1 : 0
+                        border.color: backendModeCombo.currentIndex === backendModeDelegate.index
+                                      ? (theme.accent(theme.dark ? 0.22 : 0.18))
+                                      : "transparent"
+                    }
+
+                    contentItem: Row {
+                        anchors.fill: parent
+                        anchors.leftMargin: theme.sp3
+                        anchors.rightMargin: theme.sp3
+                        spacing: theme.sp2
+
+                        Text {
+                            width: parent.width - backendModeCheckMark.width - parent.spacing
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: String(backendModeDelegate.modelData.label || "")
+                            color: backendModeCombo.currentIndex === backendModeDelegate.index ? theme.ink : theme.inkSoft
+                            font.family: theme.fontBody
+                            font.pixelSize: 13
+                            font.weight: backendModeCombo.currentIndex === backendModeDelegate.index ? Font.Medium : Font.Normal
+                            elide: Text.ElideRight
+                            Behavior on color { ColorAnimation { duration: 140 } }
+                        }
+
+                        Text {
+                            id: backendModeCheckMark
+                            width: 18
+                            anchors.verticalCenter: parent.verticalCenter
+                            horizontalAlignment: Text.AlignRight
+                            text: backendModeCombo.currentIndex === backendModeDelegate.index ? "\u2713\uFE0E" : ""
+                            color: theme.clay
+                            font.family: theme.fontBody
+                            font.pixelSize: 14
+                            font.weight: Font.Medium
+                            opacity: backendModeCombo.currentIndex === backendModeDelegate.index ? 1 : 0
+                            Behavior on opacity { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+                        }
+                    }
+                }
+
+                indicator: Item {
+                    width: 22
+                    height: 22
+                    x: backendModeCombo.width - width - theme.sp3
+                    y: (backendModeCombo.height - height) / 2
+
+                    Canvas {
+                        anchors.fill: parent
+                        onPaint: {
+                            const ctx = getContext("2d")
+                            ctx.reset()
+                            ctx.strokeStyle = theme.dark ? "#D4C8B4" : "#4B4338"
+                            ctx.lineWidth = 2.2
+                            ctx.lineCap = "round"
+                            ctx.beginPath()
+                            ctx.moveTo(width * 0.22, height * 0.38)
+                            ctx.lineTo(width * 0.50, height * 0.66)
+                            ctx.lineTo(width * 0.78, height * 0.38)
+                            ctx.stroke()
+                        }
+                        Connections {
+                            target: theme
+                            function onDarkChanged() { parent.requestPaint() }
+                        }
+                    }
+                }
+
+                contentItem: Text {
+                    leftPadding: theme.sp3
+                    rightPadding: 42
+                    verticalAlignment: Text.AlignVCenter
+                    text: backendModeCombo.currentIndex >= 0 ? backendModeCombo.model[backendModeCombo.currentIndex].label : ""
+                    color: theme.ink
+                    font.family: theme.fontBody
+                    font.pixelSize: 13
+                    elide: Text.ElideRight
+                }
+
+                background: Rectangle {
+                    implicitHeight: 46
+                    radius: 14
+                    color: theme.dark ? "#2A251F" : "#F7F1E7"
+                    border.width: 1
+                    border.color: backendModeCombo.popup.visible
+                                  ? (theme.accent(theme.dark ? 0.24 : 0.20))
+                                  : theme.line
+                }
+
+                popup: Popup {
+                    id: backendModePopup
+                    y: backendModeCombo.height + theme.sp2
+                    width: backendModeCombo.width
+                    padding: theme.sp1
+                    margins: 0
+                    transformOrigin: Item.Top
+                    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+                    enter: Transition {
+                        ParallelAnimation {
+                            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 180; easing.type: Easing.OutCubic }
+                            NumberAnimation { property: "scale"; from: 0.96; to: 1.0; duration: 220; easing.type: Easing.OutCubic }
+                            NumberAnimation { property: "y"; from: backendModeCombo.height + theme.sp1; to: backendModeCombo.height + theme.sp2; duration: 180; easing.type: Easing.OutCubic }
+                        }
+                    }
+                    exit: Transition {
+                        ParallelAnimation {
+                            NumberAnimation { property: "opacity"; from: 1; to: 0; duration: 120; easing.type: Easing.InCubic }
+                            NumberAnimation { property: "scale"; from: 1.0; to: 0.98; duration: 120; easing.type: Easing.InCubic }
+                            NumberAnimation { property: "y"; from: backendModeCombo.height + theme.sp2; to: backendModeCombo.height + theme.sp1; duration: 120; easing.type: Easing.InCubic }
+                        }
+                    }
+
+                    background: Item {
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.topMargin: 6
+                            radius: 18
+                            color: theme.dark ? Qt.rgba(0, 0, 0, 0.26) : Qt.rgba(0.15, 0.10, 0.05, 0.10)
+                            opacity: backendModePopup.opacity
+                        }
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 18
+                            color: theme.dark ? "#2A251F" : "#FBF7EF"
+                            border.width: 1
+                            border.color: theme.dark ? "#4A4035" : "#DED5C7"
+                        }
+                    }
+
+                    contentItem: ListView {
+                        clip: true
+                        implicitHeight: contentHeight
+                        model: backendModeCombo.popup.visible ? backendModeCombo.delegateModel : null
+                        currentIndex: backendModeCombo.highlightedIndex
+                        spacing: 4
+                        boundsBehavior: Flickable.StopAtBounds
+                        ScrollBar.vertical: ScrollBar { }
+                    }
+                }
+            }
+            Text {
+                visible: settings.backendMode === "remotewebsocket"
+                text: qsTr("Remote Backend URL")
+                color: theme.ink
+                font.family: theme.fontBody
+                font.pixelSize: 12
+            }
+            TextField {
+                visible: settings.backendMode === "remotewebsocket"
+                width: parent.width
+                color: theme.ink
+                cursorDelegate: ClayCursor {}
+                text: settings.remoteBackendUrl
+                onTextEdited: settings.remoteBackendUrl = text
+                font.family: theme.fontMono
+                font.pixelSize: 12
+                background: FieldBg {}
+                placeholderText: "ws://127.0.0.1:8080/ws"
+            }
+            Text {
+                visible: settings.backendMode === "remotewebsocket"
+                text: qsTr("Bearer Token")
+                color: theme.ink
+                font.family: theme.fontBody
+                font.pixelSize: 12
+            }
+            TextField {
+                visible: settings.backendMode === "remotewebsocket"
+                width: parent.width
+                color: theme.ink
+                cursorDelegate: ClayCursor {}
+                text: settings.remoteBackendToken
+                onTextEdited: settings.remoteBackendToken = text
+                echoMode: TextInput.Password
+                font.family: theme.fontMono
+                font.pixelSize: 12
+                background: FieldBg {}
+                placeholderText: qsTr("Optional bearer token")
+            }
+            ToggleRow {
+                visible: settings.backendMode === "remotewebsocket"
+                title: qsTr("Auto reconnect")
+                description: qsTr("Reconnect automatically after remote backend disconnects.")
+                checked: settings.remoteBackendAutoReconnect
+                onToggled: settings.remoteBackendAutoReconnect = checked
+            }
+
+            Text {
                 text: qsTr("Web Search")
                 color: theme.inkSoft
                 font.family: theme.fontBody

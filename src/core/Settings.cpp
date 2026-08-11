@@ -46,6 +46,15 @@ QString normalizedLanguage(const QString &input)
     return QStringLiteral("zh_CN");
 }
 
+QString normalizedBackendMode(const QString &input)
+{
+    const QString mode = input.trimmed().toLower();
+    if (mode == QStringLiteral("monolith") ||
+        mode == QStringLiteral("remotewebsocket"))
+        return mode;
+    return QStringLiteral("monolith");
+}
+
 QStringList normalizedSkillIds(const QStringList &input)
 {
     QStringList out;
@@ -98,6 +107,24 @@ void Settings::load()
             m_bypassPermissions = j["bypassPermissions"].get<bool>();
         if (j.contains("compact"))
             m_compact = j["compact"].get<bool>();
+        if (j.contains("backendMode"))
+        {
+            m_backendMode = normalizedBackendMode(
+                QString::fromStdString(j["backendMode"].get<std::string>()));
+        }
+        if (j.contains("remoteBackendUrl"))
+        {
+            m_remoteBackendUrl = QString::fromStdString(
+                j["remoteBackendUrl"].get<std::string>());
+        }
+        if (j.contains("remoteBackendToken"))
+        {
+            m_remoteBackendToken = QString::fromStdString(
+                j["remoteBackendToken"].get<std::string>());
+        }
+        if (j.contains("remoteBackendAutoReconnect"))
+            m_remoteBackendAutoReconnect =
+                j["remoteBackendAutoReconnect"].get<bool>();
         if (j.contains("startOnLogin"))
             m_startOnLogin = j["startOnLogin"].get<bool>();
         if (j.contains("closeToTray"))
@@ -184,6 +211,10 @@ void Settings::persist()
     j["streaming"] = m_streaming;
     j["bypassPermissions"] = m_bypassPermissions;
     j["compact"] = m_compact;
+    j["backendMode"] = m_backendMode.toStdString();
+    j["remoteBackendUrl"] = m_remoteBackendUrl.toStdString();
+    j["remoteBackendToken"] = m_remoteBackendToken.toStdString();
+    j["remoteBackendAutoReconnect"] = m_remoteBackendAutoReconnect;
     j["startOnLogin"] = m_startOnLogin;
     j["closeToTray"] = m_closeToTray;
     j["theme"] = m_theme.toStdString();
@@ -285,6 +316,42 @@ void Settings::setCompact(bool v)
     {
         m_compact = v;
         emit compactChanged();
+        persist();
+    }
+}
+void Settings::setBackendMode(const QString &v)
+{
+    const QString mode = normalizedBackendMode(v);
+    if (m_backendMode == mode)
+        return;
+    m_backendMode = mode;
+    emit backendModeChanged();
+    persist();
+}
+void Settings::setRemoteBackendUrl(const QString &v)
+{
+    if (m_remoteBackendUrl != v)
+    {
+        m_remoteBackendUrl = v;
+        emit remoteBackendUrlChanged();
+        persist();
+    }
+}
+void Settings::setRemoteBackendToken(const QString &v)
+{
+    if (m_remoteBackendToken != v)
+    {
+        m_remoteBackendToken = v;
+        emit remoteBackendTokenChanged();
+        persist();
+    }
+}
+void Settings::setRemoteBackendAutoReconnect(bool v)
+{
+    if (m_remoteBackendAutoReconnect != v)
+    {
+        m_remoteBackendAutoReconnect = v;
+        emit remoteBackendAutoReconnectChanged();
         persist();
     }
 }

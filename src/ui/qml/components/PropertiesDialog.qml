@@ -23,6 +23,24 @@ StarryWindow {
         dlg.visible = true
     }
 
+    function displayDateTime(value) {
+        if (!value)
+            return ""
+        if (value instanceof Date && !isNaN(value.getTime()))
+            return Qt.formatDateTime(value, "yyyy-MM-dd HH:mm")
+        if (typeof value === "string") {
+            const parsed = new Date(value)
+            if (!isNaN(parsed.getTime()))
+                return Qt.formatDateTime(parsed, "yyyy-MM-dd HH:mm")
+            return value
+        }
+        return String(value)
+    }
+
+    function displayField(value) {
+        return value === undefined || value === null ? "" : String(value)
+    }
+
     Column {
         id: contentCol
         anchors.left: parent.left
@@ -41,11 +59,11 @@ StarryWindow {
 
         Repeater {
             model: [
-                { label: qsTr("Title"), value: dlg.conv ? dlg.conv.title : "" },
-                { label: qsTr("Mode"), value: dlg.conv ? dlg.conv.modeId : "" },
-                { label: qsTr("ID"),   value: dlg.conv ? dlg.conv.id : "" },
-                { label: qsTr("Created"), value: dlg.conv ? Qt.formatDateTime(dlg.conv.created, "yyyy-MM-dd HH:mm") : "" },
-                { label: qsTr("Updated"), value: dlg.conv ? Qt.formatDateTime(dlg.conv.updated, "yyyy-MM-dd HH:mm") : "" }
+                { label: qsTr("Title"), value: dlg.conv ? dlg.displayField(dlg.conv.title) : "" },
+                { label: qsTr("Mode"), value: dlg.conv ? dlg.displayField(dlg.conv.modeId) : "" },
+                { label: qsTr("ID"),   value: dlg.conv ? dlg.displayField(dlg.conv.id) : "" },
+                { label: qsTr("Created"), value: dlg.conv ? dlg.displayDateTime(dlg.conv.created) : "" },
+                { label: qsTr("Updated"), value: dlg.conv ? dlg.displayDateTime(dlg.conv.updated) : "" }
             ]
             delegate: Column {
                 width: parent.width
@@ -60,7 +78,7 @@ StarryWindow {
                 }
                 Text {
                     width: parent.width
-                    text: modelData.value
+                    text: dlg.displayField(modelData.value)
                     color: theme.ink
                     font.family: theme.fontMono
                     font.pixelSize: 12

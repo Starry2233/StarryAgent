@@ -55,6 +55,7 @@ class FrontendSessionStore : public QAbstractListModel
     int count() const;
 
     Q_INVOKABLE Conversation *conversationAt(int index) const;
+    Q_INVOKABLE QVariantMap get(int row) const;
     Q_INVOKABLE Conversation *conversationById(const QString &id) const;
     Q_INVOKABLE void setActiveConversation(Conversation *conversation);
     Q_INVOKABLE void setActiveConversationById(const QString &id);

@@ -30,6 +30,15 @@ class Settings : public QObject
     Q_PROPERTY(bool bypassPermissions READ bypassPermissions WRITE
                    setBypassPermissions NOTIFY bypassPermissionsChanged)
     Q_PROPERTY(bool compact READ compact WRITE setCompact NOTIFY compactChanged)
+    Q_PROPERTY(QString backendMode READ backendMode WRITE setBackendMode NOTIFY
+                   backendModeChanged)
+    Q_PROPERTY(QString remoteBackendUrl READ remoteBackendUrl WRITE
+                   setRemoteBackendUrl NOTIFY remoteBackendUrlChanged)
+    Q_PROPERTY(QString remoteBackendToken READ remoteBackendToken WRITE
+                   setRemoteBackendToken NOTIFY remoteBackendTokenChanged)
+    Q_PROPERTY(bool remoteBackendAutoReconnect READ remoteBackendAutoReconnect
+                   WRITE setRemoteBackendAutoReconnect NOTIFY
+                       remoteBackendAutoReconnectChanged)
     Q_PROPERTY(bool startOnLogin READ startOnLogin WRITE setStartOnLogin NOTIFY
                    startOnLoginChanged)
     Q_PROPERTY(bool closeToTray READ closeToTray WRITE setCloseToTray NOTIFY
@@ -79,6 +88,13 @@ class Settings : public QObject
     bool streaming() const { return m_streaming; }
     bool bypassPermissions() const { return m_bypassPermissions; }
     bool compact() const { return m_compact; }
+    QString backendMode() const { return m_backendMode; }
+    QString remoteBackendUrl() const { return m_remoteBackendUrl; }
+    QString remoteBackendToken() const { return m_remoteBackendToken; }
+    bool remoteBackendAutoReconnect() const
+    {
+        return m_remoteBackendAutoReconnect;
+    }
     bool startOnLogin() const { return m_startOnLogin; }
     bool closeToTray() const { return m_closeToTray; }
     QString theme() const { return m_theme; }
@@ -118,6 +134,10 @@ class Settings : public QObject
     void setStreaming(bool v);
     void setBypassPermissions(bool v);
     void setCompact(bool v);
+    void setBackendMode(const QString &v);
+    void setRemoteBackendUrl(const QString &v);
+    void setRemoteBackendToken(const QString &v);
+    void setRemoteBackendAutoReconnect(bool v);
     void setStartOnLogin(bool v);
     void setCloseToTray(bool v);
     void setTheme(const QString &v);
@@ -143,6 +163,10 @@ class Settings : public QObject
     void streamingChanged();
     void bypassPermissionsChanged();
     void compactChanged();
+    void backendModeChanged();
+    void remoteBackendUrlChanged();
+    void remoteBackendTokenChanged();
+    void remoteBackendAutoReconnectChanged();
     void startOnLoginChanged();
     void closeToTrayChanged();
     void themeChanged();
@@ -169,6 +193,10 @@ class Settings : public QObject
     bool m_streaming{true};
     bool m_bypassPermissions{false};
     bool m_compact{true};
+    QString m_backendMode{"monolith"};
+    QString m_remoteBackendUrl;
+    QString m_remoteBackendToken;
+    bool m_remoteBackendAutoReconnect{true};
     bool m_startOnLogin{false};
     bool m_closeToTray{true};
     QString m_theme{"light"};

@@ -4,9 +4,11 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMetaObject>
 
-#include "ipc/BackendProcessTransport.h"
+#include "ipc/IBackendTransport.h"
 #include "ipc/Protocol.h"
+#include "core/Settings.h"
 
 namespace StarryAgent
 {
@@ -76,6 +78,11 @@ class BackendStore::MessageModel : public QAbstractListModel
 BackendStore::BackendStore(QObject *parent) : QAbstractListModel(parent)
 {
     m_activeMessageModel = new MessageModel(this);
+}
+
+void BackendStore::setSettings(::Settings *settings)
+{
+    m_settings = settings;
 }
 
 QAbstractItemModel *BackendStore::activeConversationModel() const
@@ -219,7 +226,7 @@ bool BackendStore::connected() const
     return m_transport && m_transport->isRunning();
 }
 
-void BackendStore::setTransport(BackendProcessTransport *transport)
+void BackendStore::setTransport(IBackendTransport *transport)
 {
     if (m_transport == transport)
         return;
@@ -228,27 +235,14 @@ void BackendStore::setTransport(BackendProcessTransport *transport)
     m_transport = transport;
     if (m_transport)
     {
-        connect(m_transport, &BackendProcessTransport::messageReceived, this,
+        connect(m_transport, &IBackendTransport::messageReceived, this,
                 &BackendStore::onTransportMessage);
-        connect(m_transport, &BackendProcessTransport::stopped, this,
+        connect(m_transport, &IBackendTransport::stopped, this,
                 &BackendStore::onTransportStopped);
-        connect(m_transport, &BackendProcessTransport::errorOccurred, this,
+        connect(m_transport, &IBackendTransport::errorOccurred, this,
                 [this](const QString &) { emit connectedChanged(); });
     }
     emit connectedChanged();
-}
-
-bool BackendStore::startLocalProcess(const QString &program,
-                                     const QStringList &arguments)
-{
-    if (!m_transport)
-        return false;
-    m_transport->setProgram(program);
-    m_transport->setArguments(arguments);
-    if (!m_transport->start())
-        return false;
-    emit connectedChanged();
-    return requestBootstrap();
 }
 
 bool BackendStore::requestBootstrap()
@@ -399,6 +393,13 @@ void BackendStore::appendAssistantText(const QString &text)
     emit sessionsChanged();
 }
 
+void BackendStore::syncSettings()
+{
+    if (!m_transport)
+        return;
+    sendTextCommand(QLatin1String(Protocol::kMethodSettingsGet));
+}
+
 void BackendStore::onTransportMessage(const QJsonObject &message)
 {
     if (message.contains(QString::fromLatin1(Protocol::kEventName)))
@@ -481,8 +482,7 @@ void BackendStore::onTransportMessage(const QJsonObject &message)
         if (event == QLatin1String(Protocol::kEventConversationStreamingChanged) ||
             event == QLatin1String(Protocol::kEventConversationErrorChanged) ||
             event == QLatin1String(Protocol::kEventConversationPlanChanged) ||
-            event == QLatin1String(Protocol::kEventConversationWorkdirChanged) ||
-            event == QLatin1String(Protocol::kEventSettingsChanged))
+            event == QLatin1String(Protocol::kEventConversationWorkdirChanged))
         {
             const QString conversationId = payload.value(QStringLiteral("conversationId")).toString();
             const int row = conversationIndexById(conversationId);
@@ -501,10 +501,16 @@ void BackendStore::onTransportMessage(const QJsonObject &message)
                     conversation.planAwaitingApproval = payload.value(QStringLiteral("planAwaitingApproval")).toBool();
                 if (payload.contains(QStringLiteral("workdir")))
                     conversation.workdir = payload.value(QStringLiteral("workdir")).toString();
+                refreshActiveConversationData();
                 emit dataChanged(index(row), index(row));
                 emit activeConversationChanged();
                 emit sessionsChanged();
             }
+            return;
+        }
+        if (event == QLatin1String(Protocol::kEventSettingsChanged))
+        {
+            applySettingsSnapshot(payload);
             return;
         }
         return;
@@ -514,8 +520,13 @@ void BackendStore::onTransportMessage(const QJsonObject &message)
     {
         const QString id = message.value(QString::fromLatin1(Protocol::kRequestId)).toString();
         const QString method = m_pendingMethods.take(id);
-        emit commandCompleted(id, method,
-                             message.value(QString::fromLatin1(Protocol::kResponseResult)).toObject(),
+        const QJsonObject result = message.value(QString::fromLatin1(Protocol::kResponseResult)).toObject();
+        if (method == QLatin1String(Protocol::kMethodSettingsGet) ||
+            method == QLatin1String(Protocol::kMethodSettingsSet))
+        {
+            applySettingsSnapshot(result);
+        }
+        emit commandCompleted(id, method, result,
                              message.value(QString::fromLatin1(Protocol::kResponseError)).toObject());
     }
 }
@@ -591,17 +602,8 @@ void BackendStore::applyBootstrap(const QJsonObject &payload)
     m_activeConversationId = payload.value(QStringLiteral("activeConversationId")).toString();
     applyConversations(payload.value(QStringLiteral("conversations")).toArray());
     applyActiveRows(payload.value(QStringLiteral("activeRows")).toArray());
-    m_activeConversationData.clear();
-    const int activeRow = conversationIndexById(m_activeConversationId);
-    if (activeRow >= 0)
-    {
-        const ConversationSummary &summary = m_conversations.at(activeRow);
-        m_activeConversationData.insert(QStringLiteral("id"), summary.id);
-        m_activeConversationData.insert(QStringLiteral("title"), summary.title);
-        m_activeConversationData.insert(QStringLiteral("modeId"), summary.modeId);
-        m_activeConversationData.insert(QStringLiteral("created"), summary.created);
-        m_activeConversationData.insert(QStringLiteral("updated"), summary.updated);
-    }
+    applySettingsSnapshot(payload.value(QStringLiteral("settings")).toObject());
+    refreshActiveConversationData();
     endResetModel();
     emit countChanged();
     emit activeConversationChanged();
@@ -623,12 +625,76 @@ void BackendStore::applyActiveRows(const QJsonArray &rows)
         m_activeMessageModel->resetRows(m_activeRows);
 }
 
+void BackendStore::applySettingsSnapshot(const QJsonObject &snapshot)
+{
+    if (!m_settings || snapshot.isEmpty())
+        return;
+    if (snapshot.contains(QStringLiteral("apiBaseUrl")))
+        m_settings->setApiBaseUrl(snapshot.value(QStringLiteral("apiBaseUrl")).toString());
+    if (snapshot.contains(QStringLiteral("apiKey")))
+        m_settings->setApiKey(snapshot.value(QStringLiteral("apiKey")).toString());
+    if (snapshot.contains(QStringLiteral("model")))
+        m_settings->setModel(snapshot.value(QStringLiteral("model")).toString());
+    if (snapshot.contains(QStringLiteral("models")))
+        m_settings->setModels(snapshot.value(QStringLiteral("models")).toVariant().toStringList());
+    if (snapshot.contains(QStringLiteral("streaming")))
+        m_settings->setStreaming(snapshot.value(QStringLiteral("streaming")).toBool());
+    if (snapshot.contains(QStringLiteral("bypassPermissions")))
+        m_settings->setBypassPermissions(snapshot.value(QStringLiteral("bypassPermissions")).toBool());
+    if (snapshot.contains(QStringLiteral("compact")))
+        m_settings->setCompact(snapshot.value(QStringLiteral("compact")).toBool());
+    if (snapshot.contains(QStringLiteral("backendMode")))
+        m_settings->setBackendMode(snapshot.value(QStringLiteral("backendMode")).toString());
+    if (snapshot.contains(QStringLiteral("remoteBackendUrl")))
+        m_settings->setRemoteBackendUrl(snapshot.value(QStringLiteral("remoteBackendUrl")).toString());
+    if (snapshot.contains(QStringLiteral("remoteBackendToken")))
+        m_settings->setRemoteBackendToken(snapshot.value(QStringLiteral("remoteBackendToken")).toString());
+    if (snapshot.contains(QStringLiteral("remoteBackendAutoReconnect")))
+        m_settings->setRemoteBackendAutoReconnect(snapshot.value(QStringLiteral("remoteBackendAutoReconnect")).toBool());
+    if (snapshot.contains(QStringLiteral("theme")))
+        m_settings->setTheme(snapshot.value(QStringLiteral("theme")).toString());
+    if (snapshot.contains(QStringLiteral("language")))
+        m_settings->setLanguage(snapshot.value(QStringLiteral("language")).toString());
+    if (snapshot.contains(QStringLiteral("currentThemeId")))
+        m_settings->setCurrentThemeId(snapshot.value(QStringLiteral("currentThemeId")).toString());
+    if (snapshot.contains(QStringLiteral("webSearchImplementation")))
+        m_settings->setWebSearchImplementation(snapshot.value(QStringLiteral("webSearchImplementation")).toString());
+    if (snapshot.contains(QStringLiteral("webSearchModel")))
+        m_settings->setWebSearchModel(snapshot.value(QStringLiteral("webSearchModel")).toString());
+    if (snapshot.contains(QStringLiteral("webSearchExternalApiKey")))
+        m_settings->setWebSearchExternalApiKey(snapshot.value(QStringLiteral("webSearchExternalApiKey")).toString());
+    if (snapshot.contains(QStringLiteral("webSearchExternalBaseUrl")))
+        m_settings->setWebSearchExternalBaseUrl(snapshot.value(QStringLiteral("webSearchExternalBaseUrl")).toString());
+    if (snapshot.contains(QStringLiteral("globalScheduledTasksEnabled")))
+        m_settings->setGlobalScheduledTasksEnabled(snapshot.value(QStringLiteral("globalScheduledTasksEnabled")).toBool());
+}
+
 void BackendStore::updateActiveConversationSummary(const QJsonObject &patch)
 {
-    const QString conversationId = patch.value(QStringLiteral("activeConversationId")).toString();
+    const QString previousActiveConversationId = m_activeConversationId;
+    const QString conversationId =
+        patch.value(QStringLiteral("activeConversationId")).toString();
     if (!conversationId.isEmpty())
         m_activeConversationId = conversationId;
+    else
+        m_activeConversationId.clear();
+
+    if (patch.contains(QStringLiteral("activeRows")) &&
+        (previousActiveConversationId != m_activeConversationId ||
+         m_activeRows.isEmpty()))
+    {
+        applyActiveRows(patch.value(QStringLiteral("activeRows")).toArray());
+    }
+    else if (previousActiveConversationId != m_activeConversationId)
+    {
+        m_activeRows.clear();
+        if (m_activeMessageModel)
+            m_activeMessageModel->resetRows(m_activeRows);
+    }
+
+    refreshActiveConversationData();
     emit activeConversationChanged();
+    emit sessionsChanged();
 }
 
 int BackendStore::conversationIndexById(const QString &conversationId) const
@@ -645,8 +711,13 @@ BackendStore::ConversationSummary BackendStore::conversationFromJson(const QJson
     summary.id = obj.value(QStringLiteral("id")).toString();
     summary.title = obj.value(QStringLiteral("title")).toString();
     summary.modeId = obj.value(QStringLiteral("modeId")).toString();
-    summary.created = obj.value(QStringLiteral("created")).toString();
-    summary.updated = obj.value(QStringLiteral("updated")).toString();
+
+    const QString created = obj.value(QStringLiteral("created")).toString().trimmed();
+    const QString updated = obj.value(QStringLiteral("updated")).toString().trimmed();
+    const QString now = QDateTime::currentDateTime().toString(Qt::ISODateWithMs);
+    summary.created = created.isEmpty() ? now : created;
+    summary.updated = updated.isEmpty() ? summary.created : updated;
+
     summary.streaming = obj.value(QStringLiteral("streaming")).toBool();
     summary.error = obj.value(QStringLiteral("error")).toString();
     summary.planMode = obj.value(QStringLiteral("planMode")).toBool();
@@ -691,6 +762,30 @@ void BackendStore::emitConversationDataChanged(int row)
 {
     if (row >= 0 && row < m_conversations.size())
         emit dataChanged(index(row), index(row));
+}
+
+void BackendStore::refreshActiveConversationData()
+{
+    QVariantMap next;
+    const int row = conversationIndexById(m_activeConversationId);
+    if (row >= 0)
+    {
+        const ConversationSummary &conversation = m_conversations.at(row);
+        next.insert(QStringLiteral("id"), conversation.id);
+        next.insert(QStringLiteral("title"), conversation.title);
+        next.insert(QStringLiteral("modeId"), conversation.modeId);
+        next.insert(QStringLiteral("created"), conversation.created);
+        next.insert(QStringLiteral("updated"), conversation.updated);
+        next.insert(QStringLiteral("streaming"), conversation.streaming);
+        next.insert(QStringLiteral("error"), conversation.error);
+        next.insert(QStringLiteral("planMode"), conversation.planMode);
+        next.insert(QStringLiteral("planText"), conversation.planText);
+        next.insert(QStringLiteral("planAwaitingApproval"),
+                    conversation.planAwaitingApproval);
+        next.insert(QStringLiteral("workdir"), conversation.workdir);
+        next.insert(QStringLiteral("active"), conversation.active);
+    }
+    m_activeConversationData = next;
 }
 
 } // namespace StarryAgent
