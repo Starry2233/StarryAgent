@@ -12,6 +12,7 @@
 #include <QVector>
 
 #include "modes/Modes.h"
+#include "backend/StarryAgentBackendGlobal.h"
 
 class OpenAIClient;
 class ToolRegistry;
@@ -27,7 +28,7 @@ class Settings;
 // stream in parallel without signal cross-talk or a shared in-flight guard.
 class ConversationRuntime;
 
-class Conversation : public QAbstractListModel
+class STARRYAGENT_BACKEND_EXPORT Conversation : public QAbstractListModel
 {
     Q_OBJECT
     Q_PROPERTY(QString id READ id CONSTANT)

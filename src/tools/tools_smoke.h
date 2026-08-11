@@ -2,6 +2,8 @@
 
 #include <QJsonObject>
 
+#include "backend/StarryAgentBackendGlobal.h"
+
 // Phase 4 verification — exercises the ToolRegistry end-to-end with no API
 // key needed. Ensures the .starryagent tree exists (running --setup first if
 // needed), then:
@@ -13,4 +15,4 @@
 //
 // Returns true iff every tool returned a non-error result. Invoke via
 // `starryagent --test-tools`.
-bool runToolsSmokeTest();
+STARRYAGENT_BACKEND_EXPORT bool runToolsSmokeTest();

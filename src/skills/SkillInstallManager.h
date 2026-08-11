@@ -4,6 +4,7 @@
 #include <QVector>
 
 #include "SkillPackageLoader.h"
+#include "backend/StarryAgentBackendGlobal.h"
 
 class Config;
 class Settings;
@@ -28,7 +29,7 @@ struct PendingChildSkillInfo
     bool installed = false;
 };
 
-class SkillInstallManager : public QAbstractListModel
+class STARRYAGENT_BACKEND_EXPORT SkillInstallManager : public QAbstractListModel
 {
     Q_OBJECT
     Q_PROPERTY(int count READ rowCount NOTIFY skillsChanged)

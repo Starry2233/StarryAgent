@@ -3,6 +3,8 @@
 #include <QJsonObject>
 #include <QString>
 
+#include "backend/StarryAgentBackendGlobal.h"
+
 // Phase 3 verification harness — runs entirely offline with a mock SSE byte
 // stream, no API key needed. Returns true iff every assertion holds.
 //
@@ -18,4 +20,4 @@
 //
 // Invoke via `starryagent --test-pipeline`; exits 0 on success, non-zero on
 // fail.
-bool runPipelineSmokeTest();
+STARRYAGENT_BACKEND_EXPORT bool runPipelineSmokeTest();

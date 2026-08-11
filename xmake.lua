@@ -246,9 +246,46 @@ target("libarchive_vendor")
     end
     add_packages("zlib", "zstd", "bzip2", {public = true})
 
+if not is_plat("android") then
+    target("starryagent_backend")
+        add_rules("qt.shared")
+        set_kind("shared")
+        add_defines("STARRYAGENT_BACKEND_LIBRARY")
+        add_files("src/core/Config.cpp", "src/core/Settings.cpp", "src/core/DebugTrace.cpp")
+        add_files("src/core/Config.h", "src/core/Settings.h", "src/core/DebugTrace.h")
+        add_files("src/api/SseParser.cpp", "src/api/StreamAssembler.cpp",
+                  "src/api/ToolCallRecognizer.cpp", "src/api/OpenAIClient.cpp",
+                  "src/api/pipeline_smoke.cpp")
+        add_files("src/api/OpenAIClient.h")
+        add_files("src/tools/ToolRegistry.cpp", "src/tools/EditTool.cpp",
+                  "src/tools/OverwriteTool.cpp", "src/tools/ExecTool.cpp",
+                  "src/tools/AndroidShellBridge.cpp",
+                  "src/tools/ShellExecTool.cpp", "src/tools/WebFetchTool.cpp",
+                  "src/tools/WebSearchTool.cpp", "src/tools/WebDownloadTool.cpp",
+                  "src/tools/Sqlite3Tool.cpp", "src/tools/RootExecTool.cpp",
+                  "src/tools/BroadcastTool.cpp", "src/tools/CliCustomTool.cpp",
+                  "src/tools/McpTool.cpp", "src/tools/MemoryToolUtils.cpp",
+                  "src/tools/RecallMemoryTool.cpp", "src/tools/WriteMemoryTool.cpp",
+                  "src/tools/LoadSkillTool.cpp", "src/tools/ReadSkillReferenceTool.cpp",
+                  "src/tools/ScheduledTaskTools.cpp",
+                  "src/tools/tools_smoke.cpp")
+        add_files("src/tools/ToolRegistry.h")
+        add_files("src/skills/SkillManager.cpp", "src/skills/SkillInstallManager.cpp", "src/skills/SkillPackageLoader.cpp")
+        add_files("src/skills/SkillInstallManager.h")
+        add_files("src/chat/Conversation.cpp", "src/chat/ConversationManager.cpp", "src/chat/ScheduledTaskManager.cpp", "src/chat/CompactSupport.cpp")
+        add_files("src/chat/Conversation.h", "src/chat/ConversationManager.h", "src/chat/ScheduledTaskManager.h")
+        add_files("src/ipc/Protocol.cpp")
+        add_files("src/ui/FrontendSessionStore.cpp", "src/ui/FrontendSessionStore.h")
+        add_includedirs("src", "src/backend")
+        add_frameworks("QtCore", "QtGui", "QtNetwork", "QtQml")
+        add_packages("nlohmann_json", "sqlite3", "libcurl")
+        add_deps("libarchive_vendor")
+        add_headerfiles("src/backend/StarryAgentBackendGlobal.h")
+end
+
 target("starryagent")
     if is_plat("android") then
-        if is_arch("armeabi-v7a") then 
+        if is_arch("armeabi-v7a") then
             print("Warning: Imoo is the bitch so the StarryAgent cannot run properly on Imoo devices. If the StarryAgent detects Imoo, it will SEGSEGV and crash. Please use armeabi-v7a devices other than Imoo.")
         end
         add_rules("qt.shared")
@@ -333,35 +370,40 @@ target("starryagent")
         set_kind("binary")
     end
     add_files("src/main.cpp")
-    add_files("src/core/Config.cpp", "src/core/Settings.cpp", "src/core/LanguageManager.cpp", "src/core/ProcessMemoryLimiter.cpp", "src/core/DebugTrace.cpp", "src/core/AutoStartManager.cpp")
-    add_files("src/core/Config.h", "src/core/Settings.h", "src/core/LanguageManager.h", "src/core/ProcessMemoryLimiter.h", "src/core/DebugTrace.h", "src/core/AutoStartManager.h")   -- moc (Q_OBJECT)
+    add_files("src/core/LanguageManager.cpp", "src/core/ProcessMemoryLimiter.cpp", "src/core/AutoStartManager.cpp")
+    add_files("src/core/LanguageManager.h", "src/core/ProcessMemoryLimiter.h", "src/core/AutoStartManager.h")   -- moc (Q_OBJECT)
+    if is_plat("android") then
+        add_files("src/core/Config.cpp", "src/core/Settings.cpp", "src/core/DebugTrace.cpp")
+        add_files("src/core/Config.h", "src/core/Settings.h", "src/core/DebugTrace.h")
+        add_files("src/api/SseParser.cpp", "src/api/StreamAssembler.cpp",
+                  "src/api/ToolCallRecognizer.cpp", "src/api/OpenAIClient.cpp",
+                  "src/api/pipeline_smoke.cpp")
+        add_files("src/api/OpenAIClient.h")
+        add_files("src/tools/ToolRegistry.cpp", "src/tools/EditTool.cpp",
+                  "src/tools/OverwriteTool.cpp", "src/tools/ExecTool.cpp",
+                  "src/tools/AndroidShellBridge.cpp",
+                  "src/tools/ShellExecTool.cpp", "src/tools/WebFetchTool.cpp",
+                  "src/tools/WebSearchTool.cpp", "src/tools/WebDownloadTool.cpp",
+                  "src/tools/Sqlite3Tool.cpp", "src/tools/RootExecTool.cpp",
+                  "src/tools/BroadcastTool.cpp", "src/tools/CliCustomTool.cpp",
+                  "src/tools/McpTool.cpp", "src/tools/MemoryToolUtils.cpp",
+                  "src/tools/RecallMemoryTool.cpp", "src/tools/WriteMemoryTool.cpp",
+                  "src/tools/LoadSkillTool.cpp", "src/tools/ReadSkillReferenceTool.cpp",
+                  "src/tools/ScheduledTaskTools.cpp",
+                  "src/tools/tools_smoke.cpp")
+        add_files("src/tools/ToolRegistry.h")
+        add_files("src/skills/SkillManager.cpp", "src/skills/SkillInstallManager.cpp", "src/skills/SkillPackageLoader.cpp")
+        add_files("src/skills/SkillInstallManager.h")
+        add_files("src/chat/Conversation.cpp", "src/chat/ConversationManager.cpp", "src/chat/ScheduledTaskManager.cpp", "src/chat/CompactSupport.cpp")
+        add_files("src/chat/Conversation.h", "src/chat/ConversationManager.h", "src/chat/ScheduledTaskManager.h")
+        add_files("src/ipc/Protocol.cpp")
+    else
+        add_deps("starryagent_backend")
+    end
     add_files("src/theme/ThemeMetadata.cpp", "src/theme/ThemeManager.cpp", "src/theme/ThemeLoader.cpp")
     add_files("src/theme/ThemeManager.h") -- moc (Q_OBJECT)
-    add_files("src/api/SseParser.cpp", "src/api/StreamAssembler.cpp",
-              "src/api/ToolCallRecognizer.cpp", "src/api/OpenAIClient.cpp",
-              "src/api/pipeline_smoke.cpp")
-    add_files("src/api/OpenAIClient.h")                      -- moc (Q_OBJECT)
-    add_files("src/tools/ToolRegistry.cpp", "src/tools/EditTool.cpp",
-              "src/tools/OverwriteTool.cpp", "src/tools/ExecTool.cpp",
-              "src/tools/AndroidShellBridge.cpp",
-              "src/tools/ShellExecTool.cpp", "src/tools/WebFetchTool.cpp",
-              "src/tools/WebSearchTool.cpp", "src/tools/WebDownloadTool.cpp",
-              "src/tools/Sqlite3Tool.cpp", "src/tools/RootExecTool.cpp",
-              "src/tools/BroadcastTool.cpp", "src/tools/CliCustomTool.cpp",
-              "src/tools/McpTool.cpp", "src/tools/MemoryToolUtils.cpp",
-              "src/tools/RecallMemoryTool.cpp", "src/tools/WriteMemoryTool.cpp",
-              "src/tools/LoadSkillTool.cpp", "src/tools/ReadSkillReferenceTool.cpp",
-              "src/tools/ScheduledTaskTools.cpp",
-              "src/tools/tools_smoke.cpp")
-    add_files("src/tools/ToolRegistry.h")                   -- moc (Q_OBJECT)
-    add_files("src/skills/SkillManager.cpp", "src/skills/SkillInstallManager.cpp", "src/skills/SkillPackageLoader.cpp")
-    add_files("src/skills/SkillInstallManager.h") -- moc (Q_OBJECT)
-    add_files("src/chat/Conversation.cpp", "src/chat/ConversationManager.cpp", "src/chat/ScheduledTaskManager.cpp", "src/chat/CompactSupport.cpp")
-    add_files("src/chat/Conversation.h", "src/chat/ConversationManager.h", "src/chat/ScheduledTaskManager.h")  -- moc (Q_OBJECT)
     add_files("src/ui/MarkdownParser.cpp")
-    add_files("src/ui/FrontendSessionStore.cpp", "src/ui/FrontendSessionStore.h") -- moc (Q_OBJECT)
     add_files("src/ui/BackendStore.cpp", "src/ui/BackendStore.h") -- moc (Q_OBJECT)
-    add_files("src/ipc/Protocol.cpp")
     add_files("src/ipc/IBackendTransport.h") -- moc (Q_OBJECT)
     add_files("src/ipc/BackendWebSocketTransport.cpp", "src/ipc/BackendWebSocketTransport.h")
     add_files("src/ui/MarkdownParser.h")                    -- moc (Q_OBJECT)

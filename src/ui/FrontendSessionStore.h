@@ -8,10 +8,11 @@
 #include <QStringList>
 #include <QVariant>
 
+#include "backend/StarryAgentBackendGlobal.h"
 #include "chat/Conversation.h"
 #include "chat/ConversationManager.h"
 
-class FrontendSessionStore : public QAbstractListModel
+class STARRYAGENT_BACKEND_EXPORT FrontendSessionStore : public QAbstractListModel
 {
     Q_OBJECT
     Q_PROPERTY(ConversationManager *conversationManager READ conversationManager WRITE setConversationManager NOTIFY conversationManagerChanged)

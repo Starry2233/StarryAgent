@@ -4,6 +4,8 @@
 #include <QString>
 #include <QStringList>
 
+#include "backend/StarryAgentBackendGlobal.h"
+
 // Resolves and owns the `.starryagent` runtime directory.
 //
 // Layout (per PLAN.md / CLAUDE.md):
@@ -20,7 +22,7 @@
 // The root itself is located via a marker file in AppData (so the choice
 // persists across launches even though the root may live anywhere). On first
 // launch the marker is absent and the UI shows DirPromptView to pick a root.
-class Config : public QObject
+class STARRYAGENT_BACKEND_EXPORT Config : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QString rootDir READ rootDir NOTIFY rootDirChanged)

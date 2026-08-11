@@ -11,6 +11,7 @@
 
 #include "Tool.h"
 #include "skills/SkillManager.h"
+#include "backend/StarryAgentBackendGlobal.h"
 
 class Config;
 class ScheduledTaskManager;
@@ -32,7 +33,7 @@ class Settings;
 //   5. Registry emits toolFinished(toolCallId, name, result).
 //   6. QML appends a role:"tool" message and triggers the next send()
 //      (the conversation loop closes in Phase 5 with ConversationManager).
-class ToolRegistry : public QObject
+class STARRYAGENT_BACKEND_EXPORT ToolRegistry : public QObject
 {
     Q_OBJECT
   public:

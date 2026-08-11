@@ -6,6 +6,7 @@
 #include <QString>
 
 #include "Conversation.h"
+#include "backend/StarryAgentBackendGlobal.h"
 
 class Config;
 class Settings;
@@ -15,7 +16,7 @@ class ScheduledTaskManager;
 // ConversationManager — owns all conversations, exposes them to QML (sidebar),
 // tracks the active one (ChatView), and persists each to
 // <root>/conversations/<id>.json.
-class ConversationManager : public QObject
+class STARRYAGENT_BACKEND_EXPORT ConversationManager : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QQmlListProperty<Conversation> conversations READ conversations

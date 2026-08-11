@@ -3,9 +3,11 @@
 #include <QString>
 #include <QStringList>
 
+#include "backend/StarryAgentBackendGlobal.h"
+
 class QCoreApplication;
 
-class DebugTrace
+class STARRYAGENT_BACKEND_EXPORT DebugTrace
 {
   public:
     static void configureFromArgs(const QStringList &args);

@@ -4,6 +4,8 @@
 #include <QString>
 #include <QStringList>
 
+#include "backend/StarryAgentBackendGlobal.h"
+
 class Config;
 
 // User settings, persisted to <root>/settings.json and exposed to QML.
@@ -14,7 +16,7 @@ class Config;
 //                                   nears the model's max context (default on,
 //                                   per CLAUDE.md "On by default")
 //   theme                          — "light" | "dark"
-class Settings : public QObject
+class STARRYAGENT_BACKEND_EXPORT Settings : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QString apiBaseUrl READ apiBaseUrl WRITE setApiBaseUrl NOTIFY

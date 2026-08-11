@@ -9,9 +9,11 @@ class Config;
 class Settings;
 class ConversationManager;
 
+#include "backend/StarryAgentBackendGlobal.h"
+
 // Persistent, main-thread scheduler. Tasks are stored independently from
 // conversations so global tasks remain meaningful after their origin is gone.
-class ScheduledTaskManager final : public QAbstractListModel
+class STARRYAGENT_BACKEND_EXPORT ScheduledTaskManager final : public QAbstractListModel
 {
     Q_OBJECT
     Q_PROPERTY(int count READ rowCount NOTIFY tasksChanged)
