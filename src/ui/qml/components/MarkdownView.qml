@@ -207,7 +207,7 @@ Item {
                 onClicked: function(mouse) {
                     if (mouse.button !== Qt.RightButton)
                         return
-                    root.selectionRequested(parent.text)
+                    root.selectionRequested(segmentData ? (segmentData.text || "") : "")
                 }
             }
         }
