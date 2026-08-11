@@ -69,6 +69,9 @@ void FrontendSessionStore::setConversationManager(ConversationManager *manager)
     if (m_conversationManager == manager)
         return;
 
+    for (const Row &row : std::as_const(m_rows))
+        unobserveConversation(row.conversation);
+
     if (m_conversationManager)
         disconnect(m_conversationManager, nullptr, this, nullptr);
 
@@ -311,8 +314,73 @@ void FrontendSessionStore::syncFromManager()
     emit sessionsChanged();
 }
 
+void FrontendSessionStore::observeConversation(Conversation *conversation)
+{
+    if (!conversation)
+        return;
+
+    auto refreshRow = [this, conversation]()
+    {
+        const int row = rowIndexForConversation(conversation);
+        if (row < 0)
+            return;
+
+        Row &entry = m_rows[row];
+        entry.title = conversation->title();
+        entry.modeId = conversation->modeId();
+        entry.created = conversation->created();
+        entry.updated = conversation->updated();
+        entry.bucket = bucketOf(entry.updated);
+        entry.relativeTime = relativeTimeOf(entry.updated);
+        entry.active = m_conversationManager && m_conversationManager->active() == conversation;
+        emit dataChanged(index(row), index(row));
+        emit sessionsChanged();
+    };
+
+    connect(conversation, &Conversation::titleChanged, this, refreshRow);
+    connect(conversation, &Conversation::modeChanged, this, refreshRow);
+    connect(conversation, &Conversation::updatedChanged, this, refreshRow);
+    connect(conversation, &QAbstractItemModel::rowsInserted, this,
+            [this, conversation, refreshRow]()
+            {
+                if (conversation == m_activeConversation)
+                    emit activeConversationChanged();
+                refreshRow();
+            });
+    connect(conversation, &QAbstractItemModel::rowsRemoved, this,
+            [this, conversation, refreshRow]()
+            {
+                if (conversation == m_activeConversation)
+                    emit activeConversationChanged();
+                refreshRow();
+            });
+    connect(conversation, &QAbstractItemModel::modelReset, this,
+            [this, conversation, refreshRow]()
+            {
+                if (conversation == m_activeConversation)
+                    emit activeConversationChanged();
+                refreshRow();
+            });
+    connect(conversation, &QAbstractItemModel::dataChanged, this,
+            [this, conversation](const QModelIndex &, const QModelIndex &,
+                                 const QList<int> &)
+            {
+                if (conversation == m_activeConversation)
+                    emit activeConversationChanged();
+            });
+}
+
+void FrontendSessionStore::unobserveConversation(Conversation *conversation)
+{
+    if (conversation)
+        disconnect(conversation, nullptr, this, nullptr);
+}
+
 void FrontendSessionStore::rebuildRows()
 {
+    for (const Row &row : std::as_const(m_rows))
+        unobserveConversation(row.conversation);
+
     m_rows.clear();
     if (!m_conversationManager)
         return;
@@ -323,6 +391,7 @@ void FrontendSessionStore::rebuildRows()
     {
         if (!conversation)
             continue;
+        observeConversation(conversation);
         Row row;
         row.conversation = conversation;
         row.id = conversation->id();
@@ -339,10 +408,81 @@ void FrontendSessionStore::rebuildRows()
 
 void FrontendSessionStore::refreshActiveConversation()
 {
+    for (const QMetaObject::Connection &connection :
+         std::as_const(m_activeConversationConnections))
+    {
+        disconnect(connection);
+    }
+    m_activeConversationConnections.clear();
+
     Conversation *nextActive = m_conversationManager ? m_conversationManager->active() : nullptr;
     if (m_activeConversation == nextActive)
+    {
+        if (m_activeConversation)
+        {
+            m_activeConversationConnections.append(connect(
+                m_activeConversation, &Conversation::streamingChanged, this,
+                &FrontendSessionStore::activeConversationChanged));
+            m_activeConversationConnections.append(connect(
+                m_activeConversation, &Conversation::errorChanged, this,
+                &FrontendSessionStore::activeConversationChanged));
+            m_activeConversationConnections.append(connect(
+                m_activeConversation, &QAbstractItemModel::rowsInserted, this,
+                &FrontendSessionStore::activeConversationChanged));
+            m_activeConversationConnections.append(connect(
+                m_activeConversation, &QAbstractItemModel::rowsRemoved, this,
+                &FrontendSessionStore::activeConversationChanged));
+            m_activeConversationConnections.append(connect(
+                m_activeConversation, &QAbstractItemModel::modelReset, this,
+                &FrontendSessionStore::activeConversationChanged));
+            m_activeConversationConnections.append(connect(
+                m_activeConversation, &QAbstractItemModel::dataChanged, this,
+                [this](const QModelIndex &, const QModelIndex &,
+                       const QList<int> &)
+                { emit activeConversationChanged(); }));
+            m_activeConversationConnections.append(connect(
+                m_activeConversation, &QObject::destroyed, this,
+                [this]()
+                {
+                    m_activeConversation = nullptr;
+                    m_activeConversationConnections.clear();
+                    emit activeConversationChanged();
+                }));
+        }
         return;
+    }
     m_activeConversation = nextActive;
+    if (m_activeConversation)
+    {
+        m_activeConversationConnections.append(connect(
+            m_activeConversation, &Conversation::streamingChanged, this,
+            &FrontendSessionStore::activeConversationChanged));
+        m_activeConversationConnections.append(connect(
+            m_activeConversation, &Conversation::errorChanged, this,
+            &FrontendSessionStore::activeConversationChanged));
+        m_activeConversationConnections.append(connect(
+            m_activeConversation, &QAbstractItemModel::rowsInserted, this,
+            &FrontendSessionStore::activeConversationChanged));
+        m_activeConversationConnections.append(connect(
+            m_activeConversation, &QAbstractItemModel::rowsRemoved, this,
+            &FrontendSessionStore::activeConversationChanged));
+        m_activeConversationConnections.append(connect(
+            m_activeConversation, &QAbstractItemModel::modelReset, this,
+            &FrontendSessionStore::activeConversationChanged));
+        m_activeConversationConnections.append(connect(
+            m_activeConversation, &QAbstractItemModel::dataChanged, this,
+            [this](const QModelIndex &, const QModelIndex &,
+                   const QList<int> &)
+            { emit activeConversationChanged(); }));
+        m_activeConversationConnections.append(connect(
+            m_activeConversation, &QObject::destroyed, this,
+            [this]()
+            {
+                m_activeConversation = nullptr;
+                m_activeConversationConnections.clear();
+                emit activeConversationChanged();
+            }));
+    }
     emit activeConversationChanged();
 }
 

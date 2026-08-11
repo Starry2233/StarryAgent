@@ -3,6 +3,7 @@
 #include <QAbstractListModel>
 #include <QDateTime>
 #include <QList>
+#include <QMetaObject>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -109,6 +110,8 @@ class STARRYAGENT_BACKEND_EXPORT FrontendSessionStore : public QAbstractListMode
         bool active = false;
     };
 
+    void observeConversation(Conversation *conversation);
+    void unobserveConversation(Conversation *conversation);
     void rebuildRows();
     void refreshActiveConversation();
     QString bucketOf(const QDateTime &updated) const;
@@ -118,4 +121,5 @@ class STARRYAGENT_BACKEND_EXPORT FrontendSessionStore : public QAbstractListMode
     ConversationManager *m_conversationManager = nullptr;
     Conversation *m_activeConversation = nullptr;
     QList<Row> m_rows;
+    QList<QMetaObject::Connection> m_activeConversationConnections;
 };
