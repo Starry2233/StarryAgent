@@ -1,3 +1,4 @@
+> ⚠️ SECURITY ALERT: All releases removed due to key compromise / 安全警告：因密钥泄露已移除所有发布版本
 # StarryAgent
 
 StarryAgent 是一个基于 Qt / QML 的跨平台 AI Agent 应用，面向 Android、macOS 和 Linux，目标是把对话、工具调用和本地执行能力整合进一个统一的桌面 / 移动端体验里。
